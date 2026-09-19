@@ -14,7 +14,8 @@ import {
   LogOut, 
   Clock,
   Key,
-  ShieldCheck
+  ShieldCheck,
+  Database
 } from 'lucide-react';
 
 export function Sidebar({ 
@@ -23,7 +24,8 @@ export function Sidebar({
   onOpenNewTransaction,
   onOpenSubmitDelivery,
   onOpenDiscordSettings,
-  onOpenEditProfile
+  onOpenEditProfile,
+  onOpenDatabaseSettings,
 }) {
   const { 
     totalBalance, 
@@ -33,7 +35,8 @@ export function Sidebar({
     myPendingDeliveries,
     logout,
     minutesRemaining,
-    discordSettings
+    discordSettings,
+    dbStatus,
   } = useFarm();
 
   const isLeader = currentRole === 'owner';
@@ -249,6 +252,30 @@ export function Sidebar({
             </button>
           </div>
         )}
+
+        {/* Supabase Database Cloud Status */}
+        <div className="px-3 pt-1">
+          <button
+            onClick={onOpenDatabaseSettings}
+            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-stone-700 bg-[#f9faf7] hover:bg-emerald-50 hover:text-emerald-900 border border-stone-200 hover:border-emerald-300 transition-all shadow-sm group"
+          >
+            <div className="flex items-center gap-2.5">
+              <Database className="w-4 h-4 text-emerald-700 group-hover:scale-110 transition-transform" />
+              <div className="text-left">
+                <div className="font-bold leading-tight">Banco de Dados</div>
+                <div className="text-[10px] text-stone-400">Nuvem Supabase</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${
+                dbStatus === 'connected' ? 'bg-emerald-500 ring-2 ring-emerald-200' : 'bg-amber-400 animate-pulse'
+              }`}></span>
+              <span className="text-[10px] font-mono text-stone-400 font-bold">
+                {dbStatus === 'connected' ? 'Ativo' : 'SQL'}
+              </span>
+            </div>
+          </button>
+        </div>
       </div>
 
       {/* Bottom Profile Switcher & Reset */}

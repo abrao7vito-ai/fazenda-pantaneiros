@@ -9,15 +9,17 @@ import { TransactionFormModal } from './components/CashFlow/TransactionFormModal
 import { SubmitDeliveryModal } from './components/Deliveries/SubmitDeliveryModal';
 import { DiscordSettingsModal } from './components/Discord/DiscordSettingsModal';
 import { EditProfileModal } from './components/Accounts/EditProfileModal';
+import { DatabaseStatusModal } from './components/Database/DatabaseStatusModal';
 import { LoginScreen } from './components/Auth/LoginScreen';
 import { formatDols } from './utils/formatters';
 import { 
   Bell, 
   PlusCircle, 
   Wheat, 
-  Menu,
-  X,
-  Lock
+  Menu, 
+  X, 
+  Lock,
+  Database
 } from 'lucide-react';
 
 function AppLayout() {
@@ -26,6 +28,7 @@ function AppLayout() {
   const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
   const [isDiscordModalOpen, setIsDiscordModalOpen] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [isDbModalOpen, setIsDbModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const { 
@@ -33,7 +36,8 @@ function AppLayout() {
     myPendingDeliveries, 
     currentUser, 
     currentRole,
-    discordSettings
+    discordSettings,
+    dbStatus
   } = useFarm();
 
   const isLeader = currentRole === 'owner';
@@ -136,6 +140,10 @@ function AppLayout() {
                 setIsEditProfileOpen(true);
                 setIsMobileMenuOpen(false);
               }}
+              onOpenDatabaseSettings={() => {
+                setIsDbModalOpen(true);
+                setIsMobileMenuOpen(false);
+              }}
             />
           </div>
         </div>
@@ -150,6 +158,7 @@ function AppLayout() {
           onOpenSubmitDelivery={() => setIsDeliveryModalOpen(true)}
           onOpenDiscordSettings={() => setIsDiscordModalOpen(true)}
           onOpenEditProfile={() => setIsEditProfileOpen(true)}
+          onOpenDatabaseSettings={() => setIsDbModalOpen(true)}
         />
       </div>
 
@@ -194,6 +203,27 @@ function AppLayout() {
             >
               <PlusCircle className="w-3.5 h-3.5" />
               <span>Lançar DOLS</span>
+            </button>
+
+            {/* Database Cloud Sync Status Button */}
+            <button
+              onClick={() => setIsDbModalOpen(true)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all transform hover:-translate-y-0.5 shadow-sm ${
+                dbStatus === 'connected'
+                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300'
+                  : dbStatus === 'tables_missing'
+                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-950 border-amber-300 animate-pulse'
+                  : 'bg-stone-100 hover:bg-stone-200 text-stone-700 border-stone-200'
+              }`}
+              title="Status da Sincronização em Nuvem (Supabase)"
+            >
+              <Database className={`w-3.5 h-3.5 ${dbStatus === 'connected' ? 'text-emerald-600' : 'text-amber-600'}`} />
+              <span className="hidden xl:inline">
+                {dbStatus === 'connected' ? 'Nuvem Conectada' : dbStatus === 'tables_missing' ? 'Configurar SQL' : 'Banco Nuvem'}
+              </span>
+              <span className={`w-2 h-2 rounded-full ${
+                dbStatus === 'connected' ? 'bg-emerald-500 ring-2 ring-emerald-200' : 'bg-amber-500 ring-2 ring-amber-200'
+              }`}></span>
             </button>
 
             {/* Discord Webhook Config (Leader Only) */}
@@ -289,6 +319,11 @@ function AppLayout() {
       <EditProfileModal
         isOpen={isEditProfileOpen}
         onClose={() => setIsEditProfileOpen(false)}
+      />
+
+      <DatabaseStatusModal
+        isOpen={isDbModalOpen}
+        onClose={() => setIsDbModalOpen(false)}
       />
 
     </div>

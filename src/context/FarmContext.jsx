@@ -17,6 +17,20 @@ import {
   sendDeliveryConfirmedDiscordLog,
   sendPayrollDiscordLog,
 } from '../utils/discordWebhook';
+import {
+  supabase,
+  isSupabaseConfigured,
+  toLocalMember,
+  toDbMember,
+  toLocalTransaction,
+  toDbTransaction,
+  toLocalGoal,
+  toDbGoal,
+  toLocalDelivery,
+  toDbDelivery,
+  toLocalCycle,
+  toDbCycle,
+} from '../utils/supabaseClient';
 
 const FarmContext = createContext();
 
@@ -125,6 +139,161 @@ export function FarmProvider({ children }) {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.DISCORD, JSON.stringify(discordSettings));
   }, [discordSettings]);
+
+  // --- Supabase Cloud Sync & Realtime Status ---
+  const [dbStatus, setDbStatus] = useState('connecting'); // 'connecting' | 'connected' | 'tables_missing' | 'offline' | 'error'
+  const [dbError, setDbError] = useState(null);
+
+  const fetchSupabaseData = async () => {
+    if (!supabase) {
+      setDbStatus('offline');
+      return;
+    }
+
+    try {
+      setDbStatus('connecting');
+      const { data: membersData, error: memErr } = await supabase.from('members').select('*');
+
+      if (memErr) {
+        if (
+          memErr.code === 'PGRST205' ||
+          memErr.message?.includes('schema cache') ||
+          memErr.message?.includes('not find the table')
+        ) {
+          setDbStatus('tables_missing');
+          setDbError('Tabelas ainda não criadas no Supabase.');
+          return;
+        }
+        throw memErr;
+      }
+
+      if (membersData && membersData.length > 0) {
+        const localMembers = membersData.map(toLocalMember);
+        setMembers(localMembers);
+      }
+
+      const { data: txData, error: txErr } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('date', { ascending: false });
+      if (!txErr && txData && txData.length > 0) {
+        const localTx = txData.map(toLocalTransaction);
+        setTransactions(localTx);
+      }
+
+      const { data: goalsData, error: goalsErr } = await supabase
+        .from('goals')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!goalsErr && goalsData && goalsData.length > 0) {
+        const localGoals = goalsData.map(toLocalGoal);
+        setGoals(localGoals);
+      }
+
+      const { data: delivData, error: delivErr } = await supabase
+        .from('deliveries')
+        .select('*')
+        .order('date', { ascending: false });
+      if (!delivErr && delivData && delivData.length > 0) {
+        const localDeliveries = delivData.map(toLocalDelivery);
+        setDeliveries(localDeliveries);
+      }
+
+      const { data: cyclesData, error: cyclesErr } = await supabase
+        .from('closed_cycles')
+        .select('*')
+        .order('date', { ascending: false });
+      if (!cyclesErr && cyclesData && cyclesData.length > 0) {
+        const localCycles = cyclesData.map(toLocalCycle);
+        setClosedCycles(localCycles);
+      }
+
+      const { data: settingsData } = await supabase.from('farm_settings').select('*');
+      if (settingsData) {
+        settingsData.forEach((row) => {
+          if (row.key === 'split' && row.value) setSplitSettings(row.value);
+          if (row.key === 'discord' && row.value) setDiscordSettings(row.value);
+        });
+      }
+
+      setDbStatus('connected');
+      setDbError(null);
+    } catch (err) {
+      console.warn('Erro ao carregar dados do Supabase:', err);
+      setDbStatus('error');
+      setDbError(err.message || 'Erro de conexão com o banco');
+    }
+  };
+
+  useEffect(() => {
+    fetchSupabaseData();
+
+    if (!supabase) return;
+
+    const channel = supabase
+      .channel('farm_realtime_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const item = toLocalTransaction(payload.new);
+          setTransactions((prev) => (prev.some((tx) => tx.id === item.id) ? prev : [item, ...prev]));
+        } else if (payload.eventType === 'UPDATE') {
+          const item = toLocalTransaction(payload.new);
+          setTransactions((prev) => prev.map((tx) => (tx.id === item.id ? item : tx)));
+        } else if (payload.eventType === 'DELETE') {
+          setTransactions((prev) => prev.filter((tx) => tx.id !== payload.old.id));
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const item = toLocalMember(payload.new);
+          setMembers((prev) => (prev.some((m) => m.id === item.id) ? prev : [...prev, item]));
+        } else if (payload.eventType === 'UPDATE') {
+          const item = toLocalMember(payload.new);
+          setMembers((prev) => prev.map((m) => (m.id === item.id ? item : m)));
+        } else if (payload.eventType === 'DELETE') {
+          setMembers((prev) => prev.filter((m) => m.id !== payload.old.id));
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'goals' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const item = toLocalGoal(payload.new);
+          setGoals((prev) => (prev.some((g) => g.id === item.id) ? prev : [item, ...prev]));
+        } else if (payload.eventType === 'UPDATE') {
+          const item = toLocalGoal(payload.new);
+          setGoals((prev) => prev.map((g) => (g.id === item.id ? item : g)));
+        } else if (payload.eventType === 'DELETE') {
+          setGoals((prev) => prev.filter((g) => g.id !== payload.old.id));
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const item = toLocalDelivery(payload.new);
+          setDeliveries((prev) => (prev.some((d) => d.id === item.id) ? prev : [item, ...prev]));
+        } else if (payload.eventType === 'UPDATE') {
+          const item = toLocalDelivery(payload.new);
+          setDeliveries((prev) => prev.map((d) => (d.id === item.id ? item : d)));
+        } else if (payload.eventType === 'DELETE') {
+          setDeliveries((prev) => prev.filter((d) => d.id !== payload.old.id));
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'closed_cycles' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const item = toLocalCycle(payload.new);
+          setClosedCycles((prev) => (prev.some((c) => c.id === item.id) ? prev : [item, ...prev]));
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'farm_settings' }, (payload) => {
+        if (payload.new) {
+          if (payload.new.key === 'split' && payload.new.value) setSplitSettings(payload.new.value);
+          if (payload.new.key === 'discord' && payload.new.value) setDiscordSettings(payload.new.value);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   // Current active user object
   const currentUser = members.find((m) => m.id === currentUserId) || members[0];
@@ -334,6 +503,12 @@ export function FarmProvider({ children }) {
 
     setTransactions((prev) => [newTx, ...prev]);
 
+    if (supabase) {
+      supabase.from('transactions').insert(toDbTransaction(newTx)).then(({ error }) => {
+        if (error) console.warn('Aviso ao sincronizar transação com Supabase:', error.message);
+      });
+    }
+
     // If income, check financial goals
     if (type === 'income') {
       setGoals((prevGoals) =>
@@ -345,10 +520,14 @@ export function FarmProvider({ children }) {
             } else if (goal.type === 'owner_to_manager' && goal.targetMemberId === member.id) {
               updatedCurrent += numAmount;
             }
+            const isFinished = updatedCurrent >= goal.targetAmount;
+            if (supabase) {
+              supabase.from('goals').update({ current_amount: updatedCurrent, status: isFinished ? 'completed' : goal.status }).eq('id', goal.id).then();
+            }
             return {
               ...goal,
               currentAmount: updatedCurrent,
-              status: updatedCurrent >= goal.targetAmount ? 'completed' : goal.status,
+              status: isFinished ? 'completed' : goal.status,
             };
           }
           return goal;
@@ -384,6 +563,9 @@ export function FarmProvider({ children }) {
 
   const deleteTransaction = (id) => {
     setTransactions((prev) => prev.filter((tx) => tx.id !== id));
+    if (supabase) {
+      supabase.from('transactions').delete().eq('id', id).then();
+    }
   };
 
   // Deliveries Workflow (Member informs, Manager confirms)
@@ -409,6 +591,12 @@ export function FarmProvider({ children }) {
     };
 
     setDeliveries((prev) => [newDelivery, ...prev]);
+
+    if (supabase) {
+      supabase.from('deliveries').insert(toDbDelivery(newDelivery)).then(({ error }) => {
+        if (error) console.warn('Aviso ao sincronizar entrega com Supabase:', error.message);
+      });
+    }
 
     const discordMessage = generateDeliverySubmissionDiscordMessage({
       memberName: currentUser.name,
@@ -475,6 +663,21 @@ export function FarmProvider({ children }) {
       );
     }
 
+    if (supabase) {
+      supabase.from('deliveries').update({
+        status: 'confirmed',
+        confirmed_at: confirmedAt,
+        confirmed_by: currentUser.name,
+      }).eq('id', deliveryId).then();
+
+      if (updatedGoal) {
+        supabase.from('goals').update({
+          current_amount: updatedGoal.currentAmount,
+          status: updatedGoal.status,
+        }).eq('id', updatedGoal.id).then();
+      }
+    }
+
     const discordConfirmation = generateDeliveryConfirmationDiscordMessage({
       memberName: delivery.memberName,
       managerName: currentUser.name,
@@ -501,6 +704,7 @@ export function FarmProvider({ children }) {
   };
 
   const rejectDelivery = (deliveryId, reason) => {
+    const rejectedAt = new Date().toISOString();
     setDeliveries((prev) =>
       prev.map((d) =>
         d.id === deliveryId
@@ -509,11 +713,20 @@ export function FarmProvider({ children }) {
               status: 'rejected',
               rejectionReason: reason || 'Não conferido ou incorreto',
               rejectedBy: currentUser.name,
-              rejectedAt: new Date().toISOString(),
+              rejectedAt,
             }
           : d
       )
     );
+
+    if (supabase) {
+      supabase.from('deliveries').update({
+        status: 'rejected',
+        rejection_reason: reason || 'Não conferido ou incorreto',
+        rejected_by: currentUser.name,
+        rejected_at: rejectedAt,
+      }).eq('id', deliveryId).then();
+    }
   };
 
   const addGoal = ({ title, type, unitType, unitLabel, targetMemberId, targetAmount, deadline, notes }) => {
@@ -535,6 +748,13 @@ export function FarmProvider({ children }) {
       notes: notes || '',
     };
     setGoals((prev) => [newGoal, ...prev]);
+
+    if (supabase) {
+      supabase.from('goals').insert(toDbGoal(newGoal)).then(({ error }) => {
+        if (error) console.warn('Aviso ao salvar meta no Supabase:', error.message);
+      });
+    }
+
     return newGoal;
   };
 
@@ -546,6 +766,9 @@ export function FarmProvider({ children }) {
         if (merged.currentAmount >= merged.targetAmount && merged.status === 'in_progress') {
           merged.status = 'completed';
         }
+        if (supabase) {
+          supabase.from('goals').update(toDbGoal(merged)).eq('id', id).then();
+        }
         return merged;
       })
     );
@@ -553,6 +776,9 @@ export function FarmProvider({ children }) {
 
   const deleteGoal = (id) => {
     setGoals((prev) => prev.filter((g) => g.id !== id));
+    if (supabase) {
+      supabase.from('goals').delete().eq('id', id).then();
+    }
   };
 
   const addMember = ({ name, role, avatar, passport, phone, pin }) => {
@@ -569,6 +795,13 @@ export function FarmProvider({ children }) {
       active: true,
     };
     setMembers((prev) => [...prev, newMember]);
+
+    if (supabase) {
+      supabase.from('members').insert(toDbMember(newMember)).then(({ error }) => {
+        if (error) console.warn('Aviso ao salvar membro no Supabase:', error.message);
+      });
+    }
+
     return newMember;
   };
 
@@ -584,6 +817,10 @@ export function FarmProvider({ children }) {
 
     setMembers((prev) => prev.filter((m) => m.id !== id));
 
+    if (supabase) {
+      supabase.from('members').delete().eq('id', id).then();
+    }
+
     // If currently logged in as this user, fallback to the owner or first member
     if (currentUserId === id) {
       const remaining = members.filter((m) => m.id !== id);
@@ -598,7 +835,11 @@ export function FarmProvider({ children }) {
     setMembers((prev) =>
       prev.map((m) => {
         if (m.id !== id) return m;
-        return { ...m, ...updates };
+        const merged = { ...m, ...updates };
+        if (supabase) {
+          supabase.from('members').update(toDbMember(merged)).eq('id', id).then();
+        }
+        return merged;
       })
     );
   };
@@ -629,6 +870,12 @@ export function FarmProvider({ children }) {
 
     setClosedCycles((prev) => [cycleRecord, ...prev]);
 
+    if (supabase) {
+      supabase.from('closed_cycles').insert(toDbCycle(cycleRecord)).then(({ error }) => {
+        if (error) console.warn('Aviso ao salvar ciclo no Supabase:', error.message);
+      });
+    }
+
     // Automatic Discord Webhook Log for Payroll / Financial Cycle Closure
     if (discordSettings?.enabled && discordSettings?.autoPayroll && discordSettings?.webhookUrl) {
       sendPayrollDiscordLog(discordSettings.webhookUrl, {
@@ -648,7 +895,20 @@ export function FarmProvider({ children }) {
   };
 
   const updateDiscordSettings = (newSettings) => {
-    setDiscordSettings((prev) => ({ ...prev, ...newSettings }));
+    setDiscordSettings((prev) => {
+      const merged = { ...prev, ...newSettings };
+      if (supabase) {
+        supabase.from('farm_settings').upsert({ key: 'discord', value: merged, updated_at: new Date().toISOString() }).then();
+      }
+      return merged;
+    });
+  };
+
+  const updateSplitSettings = (newSettings) => {
+    setSplitSettings(newSettings);
+    if (supabase) {
+      supabase.from('farm_settings').upsert({ key: 'split', value: newSettings, updated_at: new Date().toISOString() }).then();
+    }
   };
 
   const resetToDefaultData = () => {
@@ -657,7 +917,7 @@ export function FarmProvider({ children }) {
     setGoals(INITIAL_GOALS);
     setDeliveries(INITIAL_DELIVERIES);
     setSplitSettings(INITIAL_SPLIT_SETTINGS);
-    setCurrentUserId('mem-1');
+    setCurrentUserId('mem-raquel');
     setClosedCycles([]);
   };
 
@@ -680,7 +940,7 @@ export function FarmProvider({ children }) {
         pendingDeliveries,
         myPendingDeliveries,
         splitSettings,
-        setSplitSettings,
+        setSplitSettings: updateSplitSettings,
         farmReserveAmount,
         managersPoolAmount,
         membersPoolAmount,
@@ -708,6 +968,11 @@ export function FarmProvider({ children }) {
         login,
         logout,
         minutesRemaining,
+        // Database & Realtime Status
+        dbStatus,
+        dbError,
+        refreshDbConnection: fetchSupabaseData,
+        isSupabaseConfigured,
       }}
     >
       {children}
