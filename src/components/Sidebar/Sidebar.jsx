@@ -1,0 +1,341 @@
+import React from 'react';
+import { useFarm } from '../../context/FarmContext';
+import { formatDols } from '../../utils/formatters';
+import { 
+  LayoutDashboard, 
+  Target, 
+  Crown, 
+  Users, 
+  PlusCircle, 
+  TrendingUp, 
+  RotateCcw,
+  Sparkles,
+  Wheat,
+  Lock,
+  LogOut,
+  Clock
+} from 'lucide-react';
+
+export function Sidebar({ 
+  activeTab, 
+  setActiveTab, 
+  onOpenNewTransaction,
+  onOpenSubmitDelivery,
+  onOpenDiscordSettings
+}) {
+  const { 
+    totalBalance, 
+    currentUser, 
+    currentRole, 
+    setCurrentUserId, 
+    members, 
+    myPendingDeliveries,
+    resetToDefaultData,
+    logout,
+    minutesRemaining,
+    discordSettings
+  } = useFarm();
+
+  const handleReset = () => {
+    if (window.confirm('Deseja restaurar os dados de demonstração da Fazenda Pantaneiros?')) {
+      resetToDefaultData();
+    }
+  };
+
+  const isLeader = currentRole === 'owner';
+  const pendingCount = myPendingDeliveries.length;
+
+  const getRoleBadge = (role) => {
+    switch (role) {
+      case 'owner':
+        return {
+          label: '👑 Líder / Dono',
+          badge: 'bg-amber-100 text-amber-800 border-amber-300',
+        };
+      case 'manager':
+        return {
+          label: '👔 Gerente Geral',
+          badge: 'bg-blue-50 text-blue-700 border-blue-200',
+        };
+      default:
+        return {
+          label: '🌾 Membro Produtor',
+          badge: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+        };
+    }
+  };
+
+  const roleBadge = getRoleBadge(currentRole);
+
+  // Nav items: Repartição de Lucros é APENAS visível para Líderes (Dono)
+  const navItems = [
+    {
+      id: 'goals',
+      label: 'Metas & Entregas',
+      subtitle: 'Sacas de Milho & Confirmação',
+      icon: Wheat,
+      badge: pendingCount > 0 ? `${pendingCount} Pendente` : null,
+      badgeColor: 'bg-amber-100 text-amber-800 border-amber-300 animate-pulse',
+    },
+    {
+      id: 'cashflow',
+      label: 'Fluxo de Caixa',
+      subtitle: 'Lançamentos em DOLS',
+      icon: LayoutDashboard,
+      badge: null,
+    },
+    // Repartição de Lucros: SOMENTE visível se for Líder
+    ...(isLeader
+      ? [
+          {
+            id: 'profit',
+            label: 'Repartição de Lucros',
+            subtitle: 'Exclusivo para Líderes',
+            icon: Crown,
+            badge: '👑 Líder',
+            badgeColor: 'bg-amber-50 text-amber-700 border-amber-300',
+          },
+        ]
+      : []),
+    {
+      id: 'members',
+      label: 'Gestão de Contas',
+      subtitle: 'Criar & Excluir Contas',
+      icon: Users,
+      badge: `${members.length}`,
+      badgeColor: 'bg-stone-100 text-stone-600 border-stone-200',
+    },
+  ];
+
+  return (
+    <aside className="w-72 bg-white border-r border-stone-200/80 flex flex-col justify-between shrink-0 h-screen sticky top-0 overflow-y-auto select-none shadow-sm">
+      
+      {/* Top Branding Section with Official Logo */}
+      <div>
+        <div className="p-5 border-b border-stone-200/80 bg-[#fbfaf6]">
+          <div className="flex items-center gap-3.5">
+            <div className="relative">
+              <img
+                src="/logo_pantaneiros.jpg"
+                alt="Logo Fazenda Pantaneiros"
+                className="w-13 h-13 rounded-2xl object-cover ring-2 ring-ouro-500/30 shadow-md border border-stone-200"
+              />
+              <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 ring-2 ring-white flex items-center justify-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
+              </div>
+            </div>
+            <div>
+              <h1 className="text-base font-extrabold tracking-wider text-stone-900 uppercase">
+                Pantaneiros
+              </h1>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[10px] font-bold text-pantanal-700 uppercase tracking-widest px-1.5 py-0.2 rounded bg-pantanal-100/80 border border-pantanal-200">
+                  WEST FOX
+                </span>
+                <span className="text-[10px] text-stone-500 font-medium">Correio 82</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Live Farm Box Clean Card */}
+        <div className="p-4 mx-3 mt-4 rounded-2xl bg-[#f8f6f0] border border-ouro-500/30 shadow-card">
+          <div className="flex items-center justify-between text-[10px] uppercase font-bold text-stone-500 tracking-wider">
+            <span className="flex items-center gap-1.5 text-stone-700">
+              <TrendingUp className="w-3.5 h-3.5 text-pantanal-600" />
+              <span>Caixa da Fazenda</span>
+            </span>
+            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px] font-semibold">
+              Disponível
+            </span>
+          </div>
+          <div className="text-xl font-mono font-extrabold text-stone-900 mt-1.5">
+            {formatDols(totalBalance)}
+          </div>
+          <div className="text-[10px] text-stone-500 mt-1 flex items-center justify-between">
+            <span>Saldo Atual da Fazenda</span>
+            <button
+              onClick={onOpenNewTransaction}
+              className="text-[10px] text-ouro-600 hover:text-ouro-700 font-bold flex items-center gap-0.5 underline decoration-ouro-500/40"
+            >
+              + Lançar
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Action Buttons */}
+        <div className="px-3 mt-3 grid grid-cols-2 gap-2">
+          <button
+            onClick={onOpenNewTransaction}
+            className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-pantanal-700 hover:bg-pantanal-800 text-white font-bold text-xs shadow-sm transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+          >
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span>Lançar DOLS</span>
+          </button>
+
+          <button
+            onClick={onOpenSubmitDelivery}
+            className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-[#6d3f23] hover:bg-[#54301b] text-white font-bold text-xs shadow-sm transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+          >
+            <Wheat className="w-3.5 h-3.5 text-ouro-300" />
+            <span>Entregar Sacas</span>
+          </button>
+        </div>
+
+        {/* Navigation Links */}
+        <nav className="p-3 space-y-1 mt-3">
+          <div className="px-3 pb-1 text-[10px] font-mono uppercase tracking-wider text-stone-400 font-semibold">
+            Navegação Principal
+          </div>
+
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all ${
+                  isActive
+                    ? 'bg-amber-50 text-stone-900 font-bold border border-ouro-500/30 shadow-card'
+                    : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100/70 border border-transparent'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`p-2 rounded-xl transition-colors ${
+                      isActive
+                        ? 'bg-ouro-500/20 text-ouro-700'
+                        : 'bg-stone-100 text-stone-500 group-hover:text-stone-700'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold">{item.label}</div>
+                    <div className="text-[10px] text-stone-400 font-normal">
+                      {item.subtitle}
+                    </div>
+                  </div>
+                </div>
+
+                {item.badge && (
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${item.badgeColor}`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Discord Logs Integration Button (Leader Only) */}
+        {isLeader && (
+          <div className="px-3 pt-1">
+            <button
+              onClick={onOpenDiscordSettings}
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-stone-700 bg-[#f6f7fb] hover:bg-[#5865F2]/10 hover:text-[#5865F2] border border-stone-200 hover:border-[#5865F2]/30 transition-all shadow-sm group"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="text-base group-hover:scale-110 transition-transform">🎮</span>
+                <div className="text-left">
+                  <div className="font-bold leading-tight">Logs no Discord</div>
+                  <div className="text-[10px] text-stone-400">Canal de Webhook</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${discordSettings?.webhookUrl ? 'bg-emerald-500 ring-2 ring-emerald-200' : 'bg-amber-400'}`}></span>
+                <span className="text-[10px] font-mono text-stone-400 font-bold">
+                  {discordSettings?.webhookUrl ? 'Ativo' : 'Config'}
+                </span>
+              </div>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Profile Switcher & Reset */}
+      <div className="p-3 border-t border-stone-200/80 bg-[#fbfaf6] space-y-3">
+        
+        {/* Active Profile Info */}
+        <div className="p-3 rounded-2xl bg-white border border-stone-200/90 shadow-card">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
+              Operando Como
+            </span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${roleBadge.badge}`}>
+              {roleBadge.label}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center text-lg shadow-inner">
+              {currentUser.avatar}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-bold text-stone-900 truncate">{currentUser.name}</div>
+              <div className="text-[10px] text-stone-500 truncate">{currentUser.roleLabel}</div>
+            </div>
+          </div>
+
+          {/* Quick Switch Dropdown */}
+          <div className="mt-2.5 pt-2 border-t border-stone-100">
+            <label className="text-[10px] text-stone-500 block mb-1">Simular outro integrante:</label>
+            <select
+              value={currentUser.id}
+              onChange={(e) => setCurrentUserId(e.target.value)}
+              className="w-full bg-stone-50 border border-stone-200 hover:border-stone-300 rounded-lg px-2 py-1 text-xs text-stone-800 outline-none focus:ring-1 focus:ring-ouro-500 cursor-pointer"
+            >
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.avatar} {m.name} ({m.role === 'owner' ? 'Líder / Dono' : m.role === 'manager' ? 'Gerente' : 'Membro'})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Inactivity Security Badge & Logout Button */}
+        <div className="pt-1 space-y-2">
+          <div className="flex items-center justify-between text-[10px] text-stone-500 bg-stone-100/80 px-2.5 py-1.5 rounded-xl border border-stone-200">
+            <span className="flex items-center gap-1 font-mono">
+              <Clock className="w-3 h-3 text-amber-600" />
+              <span>Inativo em ~{minutesRemaining} min</span>
+            </span>
+            <span className="text-[9px] font-bold text-stone-400">15 min max</span>
+          </div>
+
+          <button
+            onClick={() => {
+              if (window.confirm('Deseja desconectar sua conta agora?')) {
+                logout('user');
+              }
+            }}
+            className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-stone-100 hover:bg-rose-50 text-stone-700 hover:text-rose-700 border border-stone-200 hover:border-rose-200 text-xs font-bold transition-all shadow-sm"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sair / Desconectar</span>
+          </button>
+        </div>
+
+        {/* Reset System button */}
+        <div className="flex items-center justify-between text-[11px] text-stone-500 px-1 pt-1">
+          <span>Fazenda Pantaneiros</span>
+          <button
+            onClick={handleReset}
+            title="Restaurar dados padrão"
+            className="flex items-center gap-1 hover:text-stone-800 transition-colors"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Resetar</span>
+          </button>
+        </div>
+
+      </div>
+
+    </aside>
+  );
+}
