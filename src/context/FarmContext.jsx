@@ -22,7 +22,7 @@ const FarmContext = createContext();
 
 const STORAGE_KEYS = {
   MEMBERS: 'pantaneiros_team_members_v1',
-  TRANSACTIONS: 'pantaneiros_team_transactions_v1',
+  TRANSACTIONS: 'pantaneiros_team_transactions_v2',
   GOALS: 'pantaneiros_team_goals_v1',
   DELIVERIES: 'pantaneiros_team_deliveries_v1',
   SETTINGS: 'pantaneiros_team_settings_v1',
@@ -210,7 +210,14 @@ export function FarmProvider({ children }) {
     .reduce((sum, tx) => sum + Number(tx.amount), 0);
 
   const totalBalance = totalIncome - totalExpense;
-  const netProfit = Math.max(0, totalBalance);
+
+  // Despesas operacionais puras (insumos, maquinário), excluindo saques de folha de pagamento já realizados
+  const operationalExpense = transactions
+    .filter((tx) => tx.type === 'expense' && tx.category !== 'Folha de Pagamento' && tx.category !== 'Retirada de Lucro')
+    .reduce((sum, tx) => sum + Number(tx.amount), 0);
+
+  // Lucro operacional repartível da produção
+  const netProfit = Math.max(0, totalIncome - operationalExpense);
 
   // Profit Split Calculation
   const farmReserveAmount = (netProfit * (splitSettings.farmReservePercent || 0)) / 100;
@@ -666,6 +673,7 @@ export function FarmProvider({ children }) {
         totalIncome,
         totalExpense,
         totalBalance,
+        operationalExpense,
         netProfit,
         goals,
         deliveries,

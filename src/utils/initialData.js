@@ -50,8 +50,19 @@ export const INITIAL_MEMBERS = [
   },
 ];
 
-// Faturamento Total Inicial: $ 26.500,00 DOLS
+// Faturamento Total Inicial: $ 26.500,00 | Saldo Atual no Caixa: $ 14.344,03 DOLS
 export const INITIAL_TRANSACTIONS = [
+  {
+    id: 'tx-pantanal-02',
+    type: 'expense',
+    amount: 12155.97,
+    memberId: 'mem-william',
+    memberName: 'William Erick [69]',
+    category: 'Folha de Pagamento',
+    description: 'Saques parciais de pagamento da equipe no baú da fazenda',
+    date: new Date().toISOString(),
+    boxBalanceAfter: 14344.03,
+  },
   {
     id: 'tx-pantanal-01',
     type: 'income',
@@ -60,7 +71,7 @@ export const INITIAL_TRANSACTIONS = [
     memberName: 'Raquel Souza [70]',
     category: 'Produção da Fazenda',
     description: 'Faturamento Total da Produção do Turno',
-    date: new Date().toISOString(),
+    date: '2026-09-19T18:00:00.000Z',
     boxBalanceAfter: 26500,
   },
 ];

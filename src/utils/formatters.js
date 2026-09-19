@@ -5,7 +5,7 @@
 export function formatDols(value, includeCurrency = true) {
   const num = Number(value) || 0;
   const formatted = num.toLocaleString('pt-BR', {
-    minimumFractionDigits: 0,
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
   return includeCurrency ? `${formatted} DOLS` : formatted;
