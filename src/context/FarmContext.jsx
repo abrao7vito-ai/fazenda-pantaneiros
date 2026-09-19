@@ -21,14 +21,14 @@ import {
 const FarmContext = createContext();
 
 const STORAGE_KEYS = {
-  MEMBERS: 'pantaneiros_prod_members_v1',
-  TRANSACTIONS: 'pantaneiros_prod_transactions_v1',
-  GOALS: 'pantaneiros_prod_goals_v1',
-  DELIVERIES: 'pantaneiros_prod_deliveries_v1',
-  SETTINGS: 'pantaneiros_prod_settings_v1',
-  CURRENT_USER: 'pantaneiros_prod_user_v1',
-  CYCLES: 'pantaneiros_prod_cycles_v1',
-  DISCORD: 'pantaneiros_prod_discord_v1',
+  MEMBERS: 'pantaneiros_team_members_v1',
+  TRANSACTIONS: 'pantaneiros_team_transactions_v1',
+  GOALS: 'pantaneiros_team_goals_v1',
+  DELIVERIES: 'pantaneiros_team_deliveries_v1',
+  SETTINGS: 'pantaneiros_team_settings_v1',
+  CURRENT_USER: 'pantaneiros_team_user_v1',
+  CYCLES: 'pantaneiros_team_cycles_v1',
+  DISCORD: 'pantaneiros_team_discord_v1',
 };
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutos em milissegundos
@@ -62,7 +62,7 @@ export function FarmProvider({ children }) {
 
   const [currentUserId, setCurrentUserId] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-    return saved || 'mem-1'; // default is Dono (Zé Pantaneiro)
+    return saved || 'mem-raquel'; // default is Dona (Raquel Souza)
   });
 
   const [closedCycles, setClosedCycles] = useState(() => {
