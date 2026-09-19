@@ -136,8 +136,14 @@ export function TransactionList() {
       {/* Transactions Table */}
       <div className="mt-4 overflow-x-auto">
         {filteredTransactions.length === 0 ? (
-          <div className="text-center py-12 text-stone-400 text-sm">
-            Nenhuma movimentação encontrada com os filtros selecionados.
+          <div className="text-center py-12 px-4 rounded-3xl bg-[#fcfbf7] border border-stone-200/80 my-2">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-xl mx-auto mb-3 shadow-xs">
+              🌾
+            </div>
+            <h4 className="text-sm font-bold text-stone-800">Caixa Pronto para a Nova Temporada</h4>
+            <p className="text-xs text-stone-500 mt-1 max-w-md mx-auto leading-relaxed">
+              Nenhuma movimentação registrada ainda. Quando o proprietário ou gerentes realizarem a abertura de caixa ou novas entradas/saídas, o histórico oficial aparecerá aqui e será sincronizado com o Discord.
+            </p>
           </div>
         ) : (
           <table className="w-full text-left border-collapse">

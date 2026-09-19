@@ -1,229 +1,52 @@
 /**
- * Default initial data for Fazenda Pantaneiros - West Fox
- * Includes Corn Sacks (Sacas de Milho) goals and confirmation flow
+ * Production initial data for Fazenda Pantaneiros - West Fox
+ * Clean state ready for the owner/proprietor and team
  */
 
 export const INITIAL_MEMBERS = [
   {
     id: 'mem-1',
-    name: 'Zé Pantaneiro',
+    name: 'Proprietário',
     role: 'owner',
     roleLabel: 'Dono da Fazenda',
     avatar: '👑',
-    passport: '#01',
+    passport: '01',
+    phone: '',
     pin: '1234',
     active: true,
   },
   {
     id: 'mem-2',
-    name: 'Marcos Gerente',
+    name: 'Gerente Geral',
     role: 'manager',
-    roleLabel: 'Gerente Geral',
+    roleLabel: 'Gerente da Fazenda',
     avatar: '👔',
-    passport: '#02',
+    passport: '02',
+    phone: '',
     pin: '1234',
     active: true,
   },
   {
     id: 'mem-3',
-    name: 'Tião Boiadeiro',
-    role: 'manager',
-    roleLabel: 'Gerente de Campo',
-    avatar: '🤠',
-    passport: '#03',
-    pin: '1234',
-    active: true,
-  },
-  {
-    id: 'mem-4',
-    name: 'Lucas Vaqueiro',
-    role: 'member',
-    roleLabel: 'Vaqueiro / Membro',
-    avatar: '🌾',
-    passport: '#04',
-    pin: '1234',
-    active: true,
-  },
-  {
-    id: 'mem-5',
-    name: 'Betão da Roça',
+    name: 'Membro Produtor',
     role: 'member',
     roleLabel: 'Membro Produtor',
-    avatar: '🚜',
-    passport: '#05',
-    pin: '1234',
-    active: true,
-  },
-  {
-    id: 'mem-6',
-    name: 'Rafa Agrônomo',
-    role: 'member',
-    roleLabel: 'Especialista Agrícola',
-    avatar: '🌱',
-    passport: '#06',
+    avatar: '🌾',
+    passport: '03',
+    phone: '',
     pin: '1234',
     active: true,
   },
 ];
 
-export const INITIAL_TRANSACTIONS = [
-  {
-    id: 'tx-1',
-    type: 'income',
-    amount: 11100,
-    memberId: 'mem-1',
-    memberName: 'Zé Pantaneiro',
-    category: 'Saldo Inicial',
-    description: 'Abertura do caixa da temporada',
-    date: '2026-09-17T10:00:00.000Z',
-    boxBalanceAfter: 11100,
-  },
-  {
-    id: 'tx-2',
-    type: 'income',
-    amount: 18900,
-    memberId: 'mem-2',
-    memberName: 'Marcos Gerente',
-    category: 'Arrecadação de Venda',
-    description: 'Entrega da remessa do gado',
-    date: '2026-09-18T14:30:00.000Z',
-    boxBalanceAfter: 30000,
-  },
-  {
-    id: 'tx-3',
-    type: 'expense',
-    amount: 3500,
-    memberId: 'mem-2',
-    memberName: 'Marcos Gerente',
-    category: 'Combustível & Manutenção',
-    description: 'Abastecimento dos tratores e peças',
-    date: '2026-09-18T16:00:00.000Z',
-    boxBalanceAfter: 26500,
-  },
-  {
-    id: 'tx-4',
-    type: 'income',
-    amount: 8500,
-    memberId: 'mem-4',
-    memberName: 'Lucas Vaqueiro',
-    category: 'Venda de Milho / Sacas',
-    description: 'Entrega de sacas de milho no galpão',
-    date: '2026-09-19T09:15:00.000Z',
-    boxBalanceAfter: 35000,
-  },
-  {
-    id: 'tx-5',
-    type: 'income',
-    amount: 12000,
-    memberId: 'mem-5',
-    memberName: 'Betão da Roça',
-    category: 'Produção / Colheita',
-    description: 'Lote semanal de produtos da terra',
-    date: '2026-09-19T11:45:00.000Z',
-    boxBalanceAfter: 47000,
-  },
-];
+// Production starts with clean cash flow history (0 DOLS)
+export const INITIAL_TRANSACTIONS = [];
 
-export const INITIAL_GOALS = [
-  {
-    id: 'goal-1',
-    title: 'Meta Semanal de Milho - Lucas Vaqueiro',
-    type: 'manager_to_member',
-    unitType: 'sacks', // 'sacks' | 'dols' | 'units'
-    unitLabel: 'Sacas de Milho',
-    creatorRole: 'manager',
-    creatorName: 'Marcos Gerente',
-    targetMemberId: 'mem-4',
-    targetMemberName: 'Lucas Vaqueiro',
-    targetAmount: 100, // 100 sacas de milho como no exemplo do usuário!
-    currentAmount: 20, // 20 sacas já confirmadas
-    deadline: '2026-09-25',
-    status: 'in_progress',
-    notes: 'Entregar para o Gerente Marcos no silo central da Fazenda Pantaneiros.',
-  },
-  {
-    id: 'goal-2',
-    title: 'Meta de Produção de Milho - Betão',
-    type: 'manager_to_member',
-    unitType: 'sacks',
-    unitLabel: 'Sacas de Milho',
-    creatorRole: 'manager',
-    creatorName: 'Marcos Gerente',
-    targetMemberId: 'mem-5',
-    targetMemberName: 'Betão da Roça',
-    targetAmount: 100,
-    currentAmount: 45,
-    deadline: '2026-09-25',
-    status: 'in_progress',
-    notes: 'Colheita e ensacamento do milho da safra.',
-  },
-  {
-    id: 'goal-3',
-    title: 'Meta de Milho - Rafa Agrônomo',
-    type: 'manager_to_member',
-    unitType: 'sacks',
-    unitLabel: 'Sacas de Milho',
-    creatorRole: 'manager',
-    creatorName: 'Tião Boiadeiro',
-    targetMemberId: 'mem-6',
-    targetMemberName: 'Rafa Agrônomo',
-    targetAmount: 100,
-    currentAmount: 10,
-    deadline: '2026-09-26',
-    status: 'in_progress',
-    notes: 'Lote de milho selecionado para sementes.',
-  },
-  {
-    id: 'goal-4',
-    title: 'Meta de Arrecadação da Gerência Pantanal',
-    type: 'owner_to_manager',
-    unitType: 'dols',
-    unitLabel: 'DOLS no Caixa',
-    creatorRole: 'owner',
-    creatorName: 'Zé Pantaneiro',
-    targetMemberId: 'mem-2',
-    targetMemberName: 'Marcos Gerente',
-    targetAmount: 80000,
-    currentAmount: 39400,
-    deadline: '2026-09-25',
-    status: 'in_progress',
-    notes: 'Meta financeira global estipulada pelo Dono.',
-  },
-];
+// Production starts with clean goals ready to be assigned
+export const INITIAL_GOALS = [];
 
-// Initial Deliveries pending / confirmed
-export const INITIAL_DELIVERIES = [
-  {
-    id: 'deliv-1',
-    goalId: 'goal-1',
-    goalTitle: 'Meta Semanal de Milho - Lucas Vaqueiro',
-    memberId: 'mem-4',
-    memberName: 'Lucas Vaqueiro',
-    managerId: 'mem-2',
-    managerName: 'Marcos Gerente',
-    itemType: 'Sacas de Milho',
-    quantity: 20, // 20 sacas entregues
-    status: 'pending', // 'pending' | 'confirmed' | 'rejected'
-    submittedAt: '2026-09-19T14:20:00.000Z',
-    confirmedAt: null,
-    notes: 'Deixei 20 sacas de milho descarregadas no galpão 1 ao lado do trator.',
-  },
-  {
-    id: 'deliv-2',
-    goalId: 'goal-2',
-    goalTitle: 'Meta de Produção de Milho - Betão',
-    memberId: 'mem-5',
-    memberName: 'Betão da Roça',
-    managerId: 'mem-2',
-    managerName: 'Marcos Gerente',
-    itemType: 'Sacas de Milho',
-    quantity: 25,
-    status: 'confirmed',
-    submittedAt: '2026-09-18T16:00:00.000Z',
-    confirmedAt: '2026-09-18T16:30:00.000Z',
-    notes: 'Conferido e guardado no silo.',
-  },
-];
+// Production starts with clean deliveries list
+export const INITIAL_DELIVERIES = [];
 
 export const INITIAL_SPLIT_SETTINGS = {
   farmReservePercent: 40,

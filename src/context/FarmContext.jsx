@@ -21,14 +21,14 @@ import {
 const FarmContext = createContext();
 
 const STORAGE_KEYS = {
-  MEMBERS: 'pantaneiros_members_v2',
-  TRANSACTIONS: 'pantaneiros_transactions_v2',
-  GOALS: 'pantaneiros_goals_v2',
-  DELIVERIES: 'pantaneiros_deliveries_v2',
-  SETTINGS: 'pantaneiros_settings_v2',
-  CURRENT_USER: 'pantaneiros_user_v2',
-  CYCLES: 'pantaneiros_cycles_v2',
-  DISCORD: 'pantaneiros_discord_v2',
+  MEMBERS: 'pantaneiros_prod_members_v1',
+  TRANSACTIONS: 'pantaneiros_prod_transactions_v1',
+  GOALS: 'pantaneiros_prod_goals_v1',
+  DELIVERIES: 'pantaneiros_prod_deliveries_v1',
+  SETTINGS: 'pantaneiros_prod_settings_v1',
+  CURRENT_USER: 'pantaneiros_prod_user_v1',
+  CYCLES: 'pantaneiros_prod_cycles_v1',
+  DISCORD: 'pantaneiros_prod_discord_v1',
 };
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutos em milissegundos
@@ -587,6 +587,15 @@ export function FarmProvider({ children }) {
     return true;
   };
 
+  const updateMember = (id, updates) => {
+    setMembers((prev) =>
+      prev.map((m) => {
+        if (m.id !== id) return m;
+        return { ...m, ...updates };
+      })
+    );
+  };
+
   const closeFinancialCycle = ({ title, periodNote }) => {
     const cycleRecord = {
       id: `cycle-${Date.now()}`,
@@ -679,6 +688,7 @@ export function FarmProvider({ children }) {
         deleteGoal,
         addMember,
         deleteMember,
+        updateMember,
         closeFinancialCycle,
         resetToDefaultData,
         // Discord Webhook Integration

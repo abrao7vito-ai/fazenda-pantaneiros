@@ -8,6 +8,7 @@ import { MemberManager } from './components/Members/MemberManager';
 import { TransactionFormModal } from './components/CashFlow/TransactionFormModal';
 import { SubmitDeliveryModal } from './components/Deliveries/SubmitDeliveryModal';
 import { DiscordSettingsModal } from './components/Discord/DiscordSettingsModal';
+import { EditProfileModal } from './components/Accounts/EditProfileModal';
 import { LoginScreen } from './components/Auth/LoginScreen';
 import { formatDols } from './utils/formatters';
 import { 
@@ -24,6 +25,7 @@ function AppLayout() {
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
   const [isDiscordModalOpen, setIsDiscordModalOpen] = useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const { 
@@ -130,6 +132,10 @@ function AppLayout() {
                 setIsDiscordModalOpen(true);
                 setIsMobileMenuOpen(false);
               }}
+              onOpenEditProfile={() => {
+                setIsEditProfileOpen(true);
+                setIsMobileMenuOpen(false);
+              }}
             />
           </div>
         </div>
@@ -143,6 +149,7 @@ function AppLayout() {
           onOpenNewTransaction={() => setIsTxModalOpen(true)}
           onOpenSubmitDelivery={() => setIsDeliveryModalOpen(true)}
           onOpenDiscordSettings={() => setIsDiscordModalOpen(true)}
+          onOpenEditProfile={() => setIsEditProfileOpen(true)}
         />
       </div>
 
@@ -202,16 +209,22 @@ function AppLayout() {
               </button>
             )}
 
-            {/* Current user mini badge */}
-            <div className="flex items-center gap-2.5 pl-3 border-l border-stone-200">
-              <div className="w-9 h-9 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center text-base shadow-inner">
+            {/* Current user mini badge (Click to edit profile & PIN) */}
+            <button
+              onClick={() => setIsEditProfileOpen(true)}
+              className="flex items-center gap-2.5 pl-3 border-l border-stone-200 hover:opacity-85 transition-opacity text-left cursor-pointer group"
+              title="Clique para editar seu Perfil e PIN"
+            >
+              <div className="w-9 h-9 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center text-base shadow-inner group-hover:scale-105 transition-transform">
                 {currentUser.avatar}
               </div>
               <div className="hidden lg:block text-left">
-                <div className="text-xs font-bold text-stone-900 leading-tight">{currentUser.name}</div>
+                <div className="text-xs font-bold text-stone-900 leading-tight flex items-center gap-1">
+                  <span>{currentUser.name}</span>
+                </div>
                 <div className="text-[10px] text-ouro-700 font-semibold">{currentUser.roleLabel}</div>
               </div>
-            </div>
+            </button>
 
           </div>
         </header>
@@ -271,6 +284,11 @@ function AppLayout() {
       <DiscordSettingsModal
         isOpen={isDiscordModalOpen}
         onClose={() => setIsDiscordModalOpen(false)}
+      />
+
+      <EditProfileModal
+        isOpen={isEditProfileOpen}
+        onClose={() => setIsEditProfileOpen(false)}
       />
 
     </div>

@@ -17,7 +17,7 @@ export function LoginScreen() {
   const { members, login, logoutReason } = useFarm();
 
   const [selectedMemberId, setSelectedMemberId] = useState(members[0]?.id || '');
-  const [pin, setPin] = useState('1234');
+  const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 

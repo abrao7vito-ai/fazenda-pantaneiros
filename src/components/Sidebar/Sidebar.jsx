@@ -8,12 +8,13 @@ import {
   Users, 
   PlusCircle, 
   TrendingUp, 
-  RotateCcw,
   Sparkles,
-  Wheat,
-  Lock,
-  LogOut,
-  Clock
+  Wheat, 
+  Lock, 
+  LogOut, 
+  Clock,
+  Key,
+  ShieldCheck
 } from 'lucide-react';
 
 export function Sidebar({ 
@@ -21,26 +22,19 @@ export function Sidebar({
   setActiveTab, 
   onOpenNewTransaction,
   onOpenSubmitDelivery,
-  onOpenDiscordSettings
+  onOpenDiscordSettings,
+  onOpenEditProfile
 }) {
   const { 
     totalBalance, 
     currentUser, 
     currentRole, 
-    setCurrentUserId, 
     members, 
     myPendingDeliveries,
-    resetToDefaultData,
     logout,
     minutesRemaining,
     discordSettings
   } = useFarm();
-
-  const handleReset = () => {
-    if (window.confirm('Deseja restaurar os dados de demonstração da Fazenda Pantaneiros?')) {
-      resetToDefaultData();
-    }
-  };
 
   const isLeader = currentRole === 'owner';
   const pendingCount = myPendingDeliveries.length;
@@ -281,20 +275,15 @@ export function Sidebar({
             </div>
           </div>
 
-          {/* Quick Switch Dropdown */}
-          <div className="mt-2.5 pt-2 border-t border-stone-100">
-            <label className="text-[10px] text-stone-500 block mb-1">Simular outro integrante:</label>
-            <select
-              value={currentUser.id}
-              onChange={(e) => setCurrentUserId(e.target.value)}
-              className="w-full bg-stone-50 border border-stone-200 hover:border-stone-300 rounded-lg px-2 py-1 text-xs text-stone-800 outline-none focus:ring-1 focus:ring-ouro-500 cursor-pointer"
+          {/* Edit Profile & Security button */}
+          <div className="mt-2.5 pt-2 border-t border-stone-100 flex items-center justify-between gap-1.5">
+            <button
+              onClick={onOpenEditProfile}
+              className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-200 text-xs font-bold transition-colors shadow-xs"
             >
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.avatar} {m.name} ({m.role === 'owner' ? 'Líder / Dono' : m.role === 'manager' ? 'Gerente' : 'Membro'})
-                </option>
-              ))}
-            </select>
+              <Key className="w-3.5 h-3.5 text-amber-600" />
+              <span>Editar Perfil & PIN</span>
+            </button>
           </div>
         </div>
 
@@ -321,17 +310,13 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* Reset System button */}
-        <div className="flex items-center justify-between text-[11px] text-stone-500 px-1 pt-1">
-          <span>Fazenda Pantaneiros</span>
-          <button
-            onClick={handleReset}
-            title="Restaurar dados padrão"
-            className="flex items-center gap-1 hover:text-stone-800 transition-colors"
-          >
-            <RotateCcw className="w-3 h-3" />
-            <span>Resetar</span>
-          </button>
+        {/* System security status footer */}
+        <div className="flex items-center justify-between text-[10px] text-stone-400 px-1 pt-1 font-mono">
+          <span>WEST FOX • CORREIO 82</span>
+          <span className="flex items-center gap-1 text-emerald-700 font-semibold">
+            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+            <span>Protegido</span>
+          </span>
         </div>
 
       </div>
