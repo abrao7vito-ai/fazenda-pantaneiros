@@ -141,18 +141,23 @@ CREATE POLICY "Allow all on farm_settings" ON public.farm_settings FOR ALL USING
 
 -- HABILITAR REALTIME
 DO $$
+DECLARE
+  t text;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
     CREATE PUBLICATION supabase_realtime;
   END IF;
-END $$;
 
-ALTER PUBLICATION supabase_realtime ADD TABLE public.members;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.transactions;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.goals;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.deliveries;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.closed_cycles;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.farm_settings;
+  FOREACH t IN ARRAY ARRAY['members', 'transactions', 'goals', 'deliveries', 'closed_cycles', 'farm_settings']
+  LOOP
+    BEGIN
+      EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I;', t);
+    EXCEPTION
+      WHEN duplicate_object THEN
+        NULL;
+    END;
+  END LOOP;
+END $$;
 
 -- DADOS INICIAIS DA FAZENDA PANTANEIROS
 INSERT INTO public.members (id, name, role, role_label, avatar, passport, phone, pin, active)
