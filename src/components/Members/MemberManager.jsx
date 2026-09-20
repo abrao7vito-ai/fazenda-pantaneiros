@@ -13,9 +13,10 @@ import {
   Phone, 
   IdCard, 
   CheckCircle2, 
-  LogIn,
   Search,
-  Filter
+  Filter,
+  Key,
+  ShieldCheck
 } from 'lucide-react';
 
 export function MemberManager() {
@@ -24,7 +25,7 @@ export function MemberManager() {
     memberPayouts, 
     currentRole, 
     currentUser, 
-    setCurrentUserId 
+    updateMember
   } = useFarm();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -262,32 +263,49 @@ export function MemberManager() {
 
               </div>
 
-              {/* Action Buttons: Switch To Account & Delete Account */}
-              <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between gap-2">
+              {/* Card Footer: Protected Account Status & Admin Actions */}
+              <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between gap-2 text-xs">
                 
-                {/* Switch to this account */}
-                <button
-                  onClick={() => setCurrentUserId(member.id)}
-                  disabled={isCurrent}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition-all ${
-                    isCurrent
-                      ? 'bg-stone-100 text-stone-400 cursor-default'
-                      : 'bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-200 hover:border-stone-300'
-                  }`}
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>{isCurrent ? 'Em Uso' : 'Entrar nesta Conta'}</span>
-                </button>
+                {isCurrent ? (
+                  <div className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-amber-50 text-amber-900 font-bold border border-amber-200">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    <span>Sua Conta Conectada</span>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-stone-50 text-stone-600 font-semibold border border-stone-200">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>PIN Protegido</span>
+                  </div>
+                )}
 
-                {/* Delete Account button (canManage, not primary owner) */}
-                {canManage && !isOwner && (
-                  <button
-                    onClick={() => setMemberToDelete(member)}
-                    title={`Excluir conta de ${member.name}`}
-                    className="p-2 rounded-xl text-stone-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                {/* Leader Actions for other members */}
+                {canManage && !isCurrent && (
+                  <div className="flex items-center gap-1">
+                    {/* Reset PIN button (only leaders can reset forgotten PIN to default 1234) */}
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Deseja redefinir o PIN de "${member.name}" para o padrão "1234"?`)) {
+                          updateMember(member.id, { pin: '1234' });
+                          alert(`O PIN de ${member.name} foi redefinido para 1234 com sucesso!`);
+                        }
+                      }}
+                      title={`Redefinir PIN de ${member.name} para 1234`}
+                      className="p-2 rounded-xl text-stone-400 hover:text-amber-700 hover:bg-amber-50 border border-transparent hover:border-amber-200 transition-colors"
+                    >
+                      <Key className="w-4 h-4" />
+                    </button>
+
+                    {/* Delete Account button (canManage, not primary owner) */}
+                    {!isOwner && (
+                      <button
+                        onClick={() => setMemberToDelete(member)}
+                        title={`Excluir conta de ${member.name}`}
+                        className="p-2 rounded-xl text-stone-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 )}
 
               </div>
