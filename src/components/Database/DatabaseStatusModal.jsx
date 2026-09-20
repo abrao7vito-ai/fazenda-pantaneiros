@@ -183,7 +183,7 @@ INSERT INTO public.farm_settings (key, value)
 VALUES
   ('split', '{"farmReservePercent": 30, "managersPercent": 35, "membersPercent": 35, "bonusForGoalAchieved": 883.33}'::jsonb),
   ('discord', '{"webhookUrl": "", "enabled": true, "autoCashflow": true, "autoDeliveries": true, "autoPayroll": true}'::jsonb)
-ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+ON CONFLICT (key) DO NOTHING;
 `;
 
 export function DatabaseStatusModal({ isOpen, onClose }) {

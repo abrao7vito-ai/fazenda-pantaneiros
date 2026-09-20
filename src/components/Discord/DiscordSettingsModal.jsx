@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFarm } from '../../context/FarmContext';
 import { testDiscordWebhook } from '../../utils/discordWebhook';
 import { 
@@ -9,7 +9,8 @@ import {
   ExternalLink, 
   ShieldCheck, 
   Bell, 
-  CheckCircle2 
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 
 export function DiscordSettingsModal({ isOpen, onClose }) {
@@ -23,6 +24,19 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
 
   const [testStatus, setTestStatus] = useState(null); // 'loading' | 'success' | 'error' | null
   const [testError, setTestError] = useState('');
+  const [saveStatus, setSaveStatus] = useState(null); // 'saving' | 'success' | 'error' | null
+
+  useEffect(() => {
+    if (discordSettings && isOpen) {
+      setWebhookUrl(discordSettings.webhookUrl || '');
+      setEnabled(discordSettings.enabled ?? true);
+      setAutoCashflow(discordSettings.autoCashflow ?? true);
+      setAutoDeliveries(discordSettings.autoDeliveries ?? true);
+      setAutoPayroll(discordSettings.autoPayroll ?? true);
+      setTestStatus(null);
+      setSaveStatus(null);
+    }
+  }, [discordSettings, isOpen]);
 
   if (!isOpen) return null;
 
@@ -47,18 +61,27 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
     }
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
+    setSaveStatus('saving');
 
-    updateDiscordSettings({
-      webhookUrl: webhookUrl.trim(),
-      enabled,
-      autoCashflow,
-      autoDeliveries,
-      autoPayroll,
-    });
+    try {
+      await updateDiscordSettings({
+        webhookUrl: webhookUrl.trim(),
+        enabled,
+        autoCashflow,
+        autoDeliveries,
+        autoPayroll,
+      });
 
-    onClose();
+      setSaveStatus('success');
+      setTimeout(() => {
+        onClose();
+      }, 1000);
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('error');
+    }
   };
 
   return (
@@ -192,10 +215,36 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
             </button>
             <button
               type="submit"
-              className="flex-1 py-2.5 px-4 rounded-xl bg-pantanal-700 hover:bg-pantanal-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all"
+              disabled={saveStatus === 'saving'}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all ${
+                saveStatus === 'success'
+                  ? 'bg-emerald-600'
+                  : saveStatus === 'error'
+                  ? 'bg-rose-600'
+                  : 'bg-pantanal-700 hover:bg-pantanal-800'
+              }`}
             >
-              <Check className="w-4 h-4" />
-              <span>Salvar Configuração do Discord</span>
+              {saveStatus === 'saving' ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Salvando no Banco de Dados...</span>
+                </>
+              ) : saveStatus === 'success' ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Salvo no Banco de Dados!</span>
+                </>
+              ) : saveStatus === 'error' ? (
+                <>
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Erro ao salvar. Tente novamente.</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>Salvar Configuração do Discord</span>
+                </>
+              )}
             </button>
           </div>
 

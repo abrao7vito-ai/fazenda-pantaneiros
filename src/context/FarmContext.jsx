@@ -212,7 +212,23 @@ export function FarmProvider({ children }) {
       if (settingsData) {
         settingsData.forEach((row) => {
           if (row.key === 'split' && row.value) setSplitSettings(row.value);
-          if (row.key === 'discord' && row.value) setDiscordSettings(row.value);
+          if (row.key === 'discord' && row.value) {
+            setDiscordSettings((prev) => {
+              if (row.value?.webhookUrl) {
+                return row.value;
+              }
+              if (prev?.webhookUrl) {
+                // If local has a webhook URL, persist it up to Supabase
+                supabase.from('farm_settings').upsert({
+                  key: 'discord',
+                  value: prev,
+                  updated_at: new Date().toISOString(),
+                }).then();
+                return prev;
+              }
+              return row.value;
+            });
+          }
         });
       }
 
@@ -894,14 +910,22 @@ export function FarmProvider({ children }) {
     return cycleRecord;
   };
 
-  const updateDiscordSettings = (newSettings) => {
-    setDiscordSettings((prev) => {
-      const merged = { ...prev, ...newSettings };
-      if (supabase) {
-        supabase.from('farm_settings').upsert({ key: 'discord', value: merged, updated_at: new Date().toISOString() }).then();
+  const updateDiscordSettings = async (newSettings) => {
+    const merged = { ...discordSettings, ...newSettings };
+    setDiscordSettings(merged);
+    localStorage.setItem(STORAGE_KEYS.DISCORD, JSON.stringify(merged));
+    if (supabase) {
+      const { error } = await supabase.from('farm_settings').upsert({
+        key: 'discord',
+        value: merged,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) {
+        console.error('Erro ao salvar discordSettings no Supabase:', error);
+        throw error;
       }
-      return merged;
-    });
+    }
+    return merged;
   };
 
   const updateSplitSettings = (newSettings) => {
