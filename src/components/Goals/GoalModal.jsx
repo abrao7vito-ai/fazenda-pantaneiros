@@ -3,9 +3,9 @@ import { useFarm } from '../../context/FarmContext';
 import { X, Target, Wheat, Sparkles, DollarSign } from 'lucide-react';
 
 export function GoalModal({ isOpen, onClose }) {
-  const { members, currentRole, addGoal, currentCompany } = useFarm();
+  const { members, activeCompanyMembers, currentRole, addGoal, currentCompany } = useFarm();
 
-  const isOwner = currentRole === 'owner';
+  const isOwner = currentRole === 'owner' || currentRole === 'master';
   const defaultType = isOwner ? 'owner_to_manager' : 'manager_to_member';
 
   const [type, setType] = useState(defaultType);
@@ -19,7 +19,9 @@ export function GoalModal({ isOpen, onClose }) {
   );
   const [notes, setNotes] = useState('Entregar para a gerência conferir.');
 
-  const eligibleMembers = members.filter((m) => {
+  // Only employees belonging to this company (or all) can be assigned goals
+  const companyStaff = activeCompanyMembers || members;
+  const eligibleMembers = companyStaff.filter((m) => {
     if (type === 'owner_to_manager') {
       return m.role === 'manager';
     } else {

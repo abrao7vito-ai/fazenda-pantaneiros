@@ -577,14 +577,15 @@ export function FarmProvider({ children }) {
     companyBalances[c.id] = inc - exp;
   });
 
-  // Profit Split Calculation (Empresa ativa)
-  const farmReserveAmount = (netProfit * (splitSettings.farmReservePercent || 0)) / 100;
-  const managersPoolAmount = (netProfit * (splitSettings.managersPercent || 0)) / 100;
-  const membersPoolAmount = (netProfit * (splitSettings.membersPercent || 0)) / 100;
+  // Scoped Members by Active Company (Master has access to all, others belong to their company or 'all')
+  const activeCompanyMembers = members.filter((m) => {
+    if (m.role === 'master' || m.companyId === 'all') return true;
+    return (m.companyId || 'comp-fazenda') === currentCompanyId;
+  });
 
-  // Member stats
+  // Member stats for Active Company
   const memberContributions = {};
-  members.forEach((m) => {
+  activeCompanyMembers.forEach((m) => {
     memberContributions[m.id] = {
       member: m,
       totalIncomeAdded: 0,
@@ -626,7 +627,7 @@ export function FarmProvider({ children }) {
     .filter((entry) => entry.member.role === 'member')
     .reduce((sum, entry) => sum + entry.totalIncomeAdded, 0);
 
-  const managersList = members.filter((m) => m.role === 'manager');
+  const managersList = activeCompanyMembers.filter((m) => m.role === 'manager');
   const managerSharePerPerson = managersList.length > 0 ? managersPoolAmount / managersList.length : 0;
 
   const memberPayouts = Object.values(memberContributions).map((entry) => {
@@ -648,7 +649,7 @@ export function FarmProvider({ children }) {
         sharePercentage = (entry.totalIncomeAdded / totalMemberIncomeOnly) * splitSettings.membersPercent;
         estimatedPayout = (entry.totalIncomeAdded / totalMemberIncomeOnly) * membersPoolAmount;
       } else {
-        const membersList = members.filter((m) => m.role === 'member');
+        const membersList = activeCompanyMembers.filter((m) => m.role === 'member');
         estimatedPayout = membersList.length > 0 ? membersPoolAmount / membersList.length : 0;
         sharePercentage = membersList.length > 0 ? splitSettings.membersPercent / membersList.length : 0;
       }
@@ -979,13 +980,26 @@ export function FarmProvider({ children }) {
     }
   };
 
-  const addMember = ({ name, role, avatar, passport, phone, pin }) => {
+  const addMember = ({ name, role, avatar, passport, phone, pin, companyId }) => {
+    const targetCompId = companyId || currentCompanyId || 'comp-fazenda';
+    const targetRole = role || 'member';
+    const targetCompanyObj = companies.find((c) => c.id === targetCompId);
+    const compName = targetCompanyObj?.name || 'Fazenda';
+
+    const getRoleLabel = () => {
+      if (targetRole === 'master') return 'Administrador Master Holding';
+      if (targetRole === 'owner') return `Dono • ${compName}`;
+      if (targetRole === 'manager') return `Gerente • ${compName}`;
+      return `Membro • ${compName}`;
+    };
+
     const newMember = {
       id: `mem-${Date.now()}`,
       name: name.trim(),
-      role: role || 'member',
-      roleLabel: role === 'owner' ? 'Dono da Fazenda' : role === 'manager' ? 'Gerente Geral' : 'Membro Produtor',
-      avatar: avatar || (role === 'owner' ? '👑' : role === 'manager' ? '👔' : '🌾'),
+      role: targetRole,
+      roleLabel: getRoleLabel(),
+      companyId: targetRole === 'master' ? 'all' : targetCompId,
+      avatar: avatar || (targetRole === 'master' ? '⚡' : targetRole === 'owner' ? '👑' : targetRole === 'manager' ? '👔' : '🌾'),
       passport: passport ? String(passport).trim() : '',
       phone: phone ? String(phone).trim() : '',
       pin: pin ? String(pin).trim() : '',
@@ -1149,6 +1163,7 @@ export function FarmProvider({ children }) {
         companyBalances,
         // Members & Users
         members,
+        activeCompanyMembers,
         currentUserId,
         setCurrentUserId,
         currentUser,

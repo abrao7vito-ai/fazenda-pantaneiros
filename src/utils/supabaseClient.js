@@ -24,6 +24,7 @@ export function toLocalMember(row) {
     name: row.name,
     role: row.role,
     roleLabel: row.role_label,
+    companyId: row.company_id || (row.role === 'master' ? 'all' : 'comp-fazenda'),
     avatar: row.avatar,
     passport: row.passport || '',
     phone: row.phone || '',
@@ -35,7 +36,7 @@ export function toLocalMember(row) {
 
 export function toDbMember(m) {
   if (!m) return null;
-  return {
+  const obj = {
     id: m.id,
     name: m.name,
     role: m.role,
@@ -46,6 +47,10 @@ export function toDbMember(m) {
     pin: m.pin || '1234',
     active: m.active ?? true,
   };
+  if (m.companyId) {
+    obj.company_id = m.companyId;
+  }
+  return obj;
 }
 
 export function toLocalTransaction(row) {

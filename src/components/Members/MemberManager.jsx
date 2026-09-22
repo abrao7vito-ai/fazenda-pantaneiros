@@ -22,6 +22,9 @@ import {
 export function MemberManager() {
   const { 
     members, 
+    activeCompanyMembers,
+    currentCompany,
+    companies,
     memberPayouts, 
     currentRole, 
     currentUser, 
@@ -31,17 +34,25 @@ export function MemberManager() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'manager' | 'member' | 'owner'
+  const [companyFilter, setCompanyFilter] = useState('current'); // 'current' | 'all' | companyId
   const [searchQuery, setSearchQuery] = useState('');
 
   const isMaster = currentRole === 'master';
   const canManage = currentRole === 'owner' || currentRole === 'manager' || isMaster;
 
-  // Count stats
-  const totalCount = members.length;
-  const managersCount = members.filter((m) => m.role === 'manager').length;
-  const membersCount = members.filter((m) => m.role === 'member').length;
+  // Se for master e selecionar 'all', mostra tudo; caso contrário, foca na empresa ativa
+  const baseMembersList = isMaster && companyFilter === 'all'
+    ? members
+    : isMaster && companyFilter !== 'current'
+    ? members.filter((m) => m.role === 'master' || m.companyId === 'all' || m.companyId === companyFilter)
+    : activeCompanyMembers;
 
-  const filteredMembers = members.filter((m) => {
+  // Count stats
+  const totalCount = baseMembersList.length;
+  const managersCount = baseMembersList.filter((m) => m.role === 'manager').length;
+  const membersCount = baseMembersList.filter((m) => m.role === 'member').length;
+
+  const filteredMembers = baseMembersList.filter((m) => {
     const matchesFilter = activeFilter === 'all' ? true : m.role === activeFilter;
     const matchesSearch = 
       m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -60,23 +71,23 @@ export function MemberManager() {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
               <Users className="w-3.5 h-3.5 text-amber-700" />
-              <span>Controle de Acesso da Fazenda</span>
+              <span>Quadro de Funcionários • {currentCompany?.name}</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-stone-900 tracking-tight">
-              Gestão de Contas: Gerentes & Membros
+              Equipe de {currentCompany?.name}
             </h2>
             <p className="text-sm text-stone-600 max-w-2xl leading-relaxed">
-              Crie novas contas de acesso para gerentes e membros da Fazenda Pantaneiros, acompanhe o desempenho individual e gerencie ou exclua contas quando necessário.
+              Cada empresa opera com seu quadro de funcionários separado. Crie novas contas de Dono, Gerente ou Membros vinculadas diretamente a <strong>{currentCompany?.name}</strong>.
             </p>
           </div>
 
           {canManage && (
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center gap-2 bg-pantanal-700 hover:bg-pantanal-800 text-white font-bold px-5 py-3 rounded-2xl text-xs sm:text-sm shadow-sm transition-all transform hover:-translate-y-0.5 active:translate-y-0 shrink-0"
+              className="flex items-center gap-2 bg-pantanal-700 hover:bg-pantanal-800 text-white font-bold px-5 py-3 rounded-2xl text-xs sm:text-sm shadow-sm transition-all transform hover:-translate-y-0.5 active:translate-y-0 shrink-0 cursor-pointer"
             >
               <UserPlus className="w-4 h-4" />
-              <span>Criar Nova Conta</span>
+              <span>Contratar p/ {currentCompany?.name}</span>
             </button>
           )}
         </div>
@@ -90,7 +101,7 @@ export function MemberManager() {
               </div>
               <div>
                 <div className="font-bold text-stone-900">Gerentes Cadastrados</div>
-                <div className="text-[11px] text-stone-500">Coordenam equipes e validam sacas</div>
+                <div className="text-[11px] text-stone-500">Coordenam metas da empresa</div>
               </div>
             </div>
             <span className="text-base font-mono font-bold text-stone-900">{managersCount}</span>
@@ -103,7 +114,7 @@ export function MemberManager() {
               </div>
               <div>
                 <div className="font-bold text-stone-900">Membros Produtores</div>
-                <div className="text-[11px] text-stone-500">Executam metas e entregam sacas</div>
+                <div className="text-[11px] text-stone-500">Executam tarefas de {currentCompany?.unitLabel}</div>
               </div>
             </div>
             <span className="text-base font-mono font-bold text-stone-900">{membersCount}</span>
@@ -115,8 +126,8 @@ export function MemberManager() {
                 👥
               </div>
               <div>
-                <div className="font-bold text-stone-900">Total de Integrantes</div>
-                <div className="text-[11px] text-stone-500">Equipe Fazenda Pantaneiros</div>
+                <div className="font-bold text-stone-900">Total na Empresa</div>
+                <div className="text-[11px] text-stone-500">Quadro ativo exclusivo</div>
               </div>
             </div>
             <span className="text-base font-mono font-bold text-stone-900">{totalCount}</span>
@@ -129,7 +140,7 @@ export function MemberManager() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         
         {/* Role Filters */}
-        <div className="flex items-center gap-1.5 bg-white p-1 rounded-2xl border border-stone-200 shadow-card">
+        <div className="flex items-center gap-1.5 bg-white p-1 rounded-2xl border border-stone-200 shadow-card flex-wrap">
           <button
             onClick={() => setActiveFilter('all')}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
@@ -138,7 +149,7 @@ export function MemberManager() {
                 : 'text-stone-600 hover:text-stone-900'
             }`}
           >
-            Todas as Contas ({totalCount})
+            Todos ({totalCount})
           </button>
 
           <button
@@ -162,6 +173,26 @@ export function MemberManager() {
           >
             <span>🌾 Membros ({membersCount})</span>
           </button>
+
+          {/* Master Holding Switcher for viewing any company's staff */}
+          {isMaster && (
+            <div className="pl-2 border-l border-stone-200 flex items-center gap-1">
+              <span className="text-[10px] text-stone-400 font-bold uppercase">Holding:</span>
+              <select
+                value={companyFilter}
+                onChange={(e) => setCompanyFilter(e.target.value)}
+                className="bg-stone-100 border border-stone-200 rounded-lg px-2 py-1 text-xs font-semibold text-stone-700 outline-none"
+              >
+                <option value="current">Empresa Ativa ({currentCompany?.name})</option>
+                <option value="all">⚡ Todos os Negócios (Global)</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.icon} {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Search */}
@@ -240,7 +271,17 @@ export function MemberManager() {
                     <p className="text-xs text-stone-500 truncate">{member.roleLabel}</p>
 
                     {/* Metadata tags */}
-                    <div className="flex items-center gap-2 mt-1 text-[11px] text-stone-500 font-mono">
+                    <div className="flex items-center gap-1.5 flex-wrap mt-1 text-[11px] text-stone-500 font-mono">
+                      {member.companyId && member.companyId !== 'all' && (
+                        <span className="bg-amber-50 text-amber-900 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-sans font-bold">
+                          {companies.find((c) => c.id === member.companyId)?.icon || '🏢'} {companies.find((c) => c.id === member.companyId)?.name || 'Empresa'}
+                        </span>
+                      )}
+                      {member.companyId === 'all' && (
+                        <span className="bg-purple-50 text-purple-900 border border-purple-200 px-1.5 py-0.5 rounded text-[10px] font-sans font-bold">
+                          ⚡ Todas as Empresas
+                        </span>
+                      )}
                       {member.passport && (
                         <span className="bg-stone-100 px-1.5 py-0.2 rounded border border-stone-200">
                           ID: {member.passport}

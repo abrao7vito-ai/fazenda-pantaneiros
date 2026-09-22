@@ -3,10 +3,11 @@ import { useFarm } from '../../context/FarmContext';
 import { X, UserPlus, Shield, Wheat, Briefcase, Sparkles, Key } from 'lucide-react';
 
 export function CreateAccountModal({ isOpen, onClose }) {
-  const { addMember } = useFarm();
+  const { addMember, companies, currentCompanyId } = useFarm();
 
+  const [companyId, setCompanyId] = useState(currentCompanyId || 'comp-fazenda');
   const [name, setName] = useState('');
-  const [role, setRole] = useState('member'); // 'member' | 'manager'
+  const [role, setRole] = useState('member'); // 'member' | 'manager' | 'owner'
   const [passport, setPassport] = useState('');
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
@@ -39,6 +40,7 @@ export function CreateAccountModal({ isOpen, onClose }) {
       passport: passport.trim(),
       phone: phone.trim(),
       pin: pin.trim(),
+      companyId,
     });
 
     // Reset and close
@@ -74,6 +76,27 @@ export function CreateAccountModal({ isOpen, onClose }) {
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           
+          {/* Company Target Selector */}
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+              Empresa / Negócio do Funcionário: *
+            </label>
+            <select
+              value={companyId}
+              onChange={(e) => setCompanyId(e.target.value)}
+              className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3.5 py-2.5 text-xs font-bold text-stone-800 focus:bg-white focus:border-amber-400 outline-none transition-colors cursor-pointer"
+            >
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.icon} {c.name} ({c.segment})
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-stone-500 mt-1">
+              Este funcionário trabalhará exclusivamente nesta empresa selecionada.
+            </p>
+          </div>
+
           {/* Role selector */}
           <div>
             <label className="block text-xs font-semibold text-stone-700 mb-1.5">

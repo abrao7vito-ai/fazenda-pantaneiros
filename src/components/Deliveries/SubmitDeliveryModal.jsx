@@ -4,7 +4,7 @@ import { generateDeliverySubmissionDiscordMessage } from '../../utils/formatters
 import { X, Wheat, Send, Copy, Check } from 'lucide-react';
 
 export function SubmitDeliveryModal({ isOpen, onClose, preselectedGoalId = null }) {
-  const { members, currentUser, goals, submitDelivery, currentCompany } = useFarm();
+  const { members, activeCompanyMembers, currentUser, goals, submitDelivery, currentCompany } = useFarm();
 
   const [goalId, setGoalId] = useState(preselectedGoalId || '');
   const [managerId, setManagerId] = useState('');
@@ -13,7 +13,8 @@ export function SubmitDeliveryModal({ isOpen, onClose, preselectedGoalId = null 
   const [copied, setCopied] = useState(false);
   const [submittedMessage, setSubmittedMessage] = useState(null);
 
-  const managers = members.filter((m) => m.role === 'manager' || m.role === 'owner');
+  const companyStaff = activeCompanyMembers || members;
+  const managers = companyStaff.filter((m) => m.role === 'manager' || m.role === 'owner' || m.role === 'master');
   const memberGoals = goals.filter((g) => {
     if (g.unitType !== 'sacks' || g.status !== 'in_progress') return false;
     if (currentUser.role === 'member') {
