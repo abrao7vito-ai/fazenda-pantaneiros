@@ -5,6 +5,7 @@ import { CashFlowDashboard } from './components/CashFlow/CashFlowDashboard';
 import { GoalManager } from './components/Goals/GoalManager';
 import { ProfitSplitView } from './components/OwnerProfitSplit/ProfitSplitView';
 import { MemberManager } from './components/Members/MemberManager';
+import { CompanyPanel } from './components/Company/CompanyPanel';
 import { TransactionFormModal } from './components/CashFlow/TransactionFormModal';
 import { SubmitDeliveryModal } from './components/Deliveries/SubmitDeliveryModal';
 import { DiscordSettingsModal } from './components/Discord/DiscordSettingsModal';
@@ -43,10 +44,14 @@ function AppLayout() {
   const isLeader = currentRole === 'owner';
   const pendingCount = myPendingDeliveries.length;
 
-  // Se o usuário não for líder e tentar acessar a repartição de lucros, redireciona
+  // Se o usuário não for líder e tentar acessar o Painel da Empresa, redireciona para metas
   useEffect(() => {
-    if (activeTab === 'profit' && !isLeader) {
+    if (activeTab === 'company' && !isLeader) {
       setActiveTab('goals');
+    }
+    // Backward compatibility if someone had old tabs saved
+    if ((activeTab === 'profit' || activeTab === 'members')) {
+      setActiveTab(isLeader ? 'company' : 'goals');
     }
   }, [activeTab, isLeader]);
 
@@ -60,17 +65,12 @@ function AppLayout() {
       case 'goals':
         return {
           title: 'Painel de Metas & Entrega de Sacas',
-          subtitle: 'Metas de 100 Sacas de Milho e Validação com o Gerente',
+          subtitle: 'Metas de Produção e Validação de Entregas da Fazenda',
         };
-      case 'profit':
+      case 'company':
         return {
-          title: 'Repartição de Lucros da Fazenda',
-          subtitle: 'Exclusivo para Líderes • Divisão de Lucro Líquido Real',
-        };
-      case 'members':
-        return {
-          title: 'Gestão de Contas: Gerentes & Membros',
-          subtitle: 'Cadastre novas contas e gerencie os integrantes da Fazenda Pantaneiros',
+          title: 'Painel da Empresa',
+          subtitle: 'Exclusivo para Donos • Divisão de Lucros, Gestão de Contas e Conexões',
         };
       default:
         return {
@@ -205,40 +205,6 @@ function AppLayout() {
               <span>Lançar DOLS</span>
             </button>
 
-            {/* Database Cloud Sync Status Button */}
-            <button
-              onClick={() => setIsDbModalOpen(true)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all transform hover:-translate-y-0.5 shadow-sm ${
-                dbStatus === 'connected'
-                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300'
-                  : dbStatus === 'tables_missing'
-                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-950 border-amber-300 animate-pulse'
-                  : 'bg-stone-100 hover:bg-stone-200 text-stone-700 border-stone-200'
-              }`}
-              title="Status da Sincronização em Nuvem (Supabase)"
-            >
-              <Database className={`w-3.5 h-3.5 ${dbStatus === 'connected' ? 'text-emerald-600' : 'text-amber-600'}`} />
-              <span className="hidden xl:inline">
-                {dbStatus === 'connected' ? 'Nuvem Conectada' : dbStatus === 'tables_missing' ? 'Configurar SQL' : 'Banco Nuvem'}
-              </span>
-              <span className={`w-2 h-2 rounded-full ${
-                dbStatus === 'connected' ? 'bg-emerald-500 ring-2 ring-emerald-200' : 'bg-amber-500 ring-2 ring-amber-200'
-              }`}></span>
-            </button>
-
-            {/* Discord Webhook Config (Leader Only) */}
-            {isLeader && (
-              <button
-                onClick={() => setIsDiscordModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#5865F2]/10 hover:bg-[#5865F2]/20 text-[#5865F2] font-bold text-xs border border-[#5865F2]/25 shadow-sm transition-all transform hover:-translate-y-0.5"
-                title="Configurar Logs Automáticos no Discord"
-              >
-                <span>🎮</span>
-                <span className="hidden xl:inline">Discord</span>
-                <span className={`w-2 h-2 rounded-full ${discordSettings?.webhookUrl ? 'bg-emerald-500' : 'bg-amber-400'}`}></span>
-              </button>
-            )}
-
             {/* Current user mini badge (Click to edit profile & PIN) */}
             <button
               onClick={() => setIsEditProfileOpen(true)}
@@ -269,21 +235,22 @@ function AppLayout() {
             <GoalManager onOpenSubmitDelivery={() => setIsDeliveryModalOpen(true)} />
           )}
 
-          {activeTab === 'profit' && (
+          {activeTab === 'company' && (
             isLeader ? (
-              <ProfitSplitView />
+              <CompanyPanel
+                onOpenDiscordSettings={() => setIsDiscordModalOpen(true)}
+                onOpenDatabaseSettings={() => setIsDbModalOpen(true)}
+              />
             ) : (
               <div className="bg-white border border-stone-200 rounded-3xl p-12 text-center shadow-sm">
                 <Lock className="w-12 h-12 text-stone-400 mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-stone-800">Acesso Exclusivo para Líderes</h3>
+                <h3 className="text-lg font-bold text-stone-800">Acesso Exclusivo para o Dono</h3>
                 <p className="text-xs text-stone-500 mt-1 max-w-md mx-auto">
-                  A repartição de lucros da Fazenda Pantaneiros é reservada exclusivamente para o Dono e liderança.
+                  O Painel da Empresa é reservado exclusivamente para os proprietários da Fazenda Pantaneiros.
                 </p>
               </div>
             )
           )}
-
-          {activeTab === 'members' && <MemberManager />}
         </main>
 
         {/* Clean Footer */}

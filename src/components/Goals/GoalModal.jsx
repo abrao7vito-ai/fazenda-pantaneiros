@@ -13,7 +13,7 @@ export function GoalModal({ isOpen, onClose }) {
   const [unitLabel, setUnitLabel] = useState('Sacas de Milho');
   const [title, setTitle] = useState('Meta de 100 Sacas de Milho');
   const [targetAmount, setTargetAmount] = useState('100');
-  const [targetMemberId, setTargetMemberId] = useState('');
+  const [targetMemberId, setTargetMemberId] = useState('all');
   const [deadline, setDeadline] = useState(
     new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
@@ -28,10 +28,10 @@ export function GoalModal({ isOpen, onClose }) {
   });
 
   useEffect(() => {
-    if (eligibleMembers.length > 0 && !targetMemberId) {
-      setTargetMemberId(eligibleMembers[0].id);
+    if (!targetMemberId) {
+      setTargetMemberId('all');
     }
-  }, [eligibleMembers, targetMemberId]);
+  }, [targetMemberId]);
 
   if (!isOpen) return null;
 
@@ -188,13 +188,16 @@ export function GoalModal({ isOpen, onClose }) {
               <select
                 value={targetMemberId}
                 onChange={(e) => setTargetMemberId(e.target.value)}
-                className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3 py-2.5 text-xs text-stone-800 focus:bg-white focus:border-amber-400 outline-none"
+                className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3 py-2.5 text-xs text-stone-800 focus:bg-white focus:border-amber-400 outline-none font-medium"
               >
-                {eligibleMembers.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.avatar} {m.name} ({m.roleLabel})
-                  </option>
-                ))}
+                <option value="all">🌾 Para Todos os Membros (Meta Geral da Fazenda)</option>
+                <optgroup label="Ou atribuir a um integrante específico:">
+                  {eligibleMembers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.avatar} {m.name} ({m.roleLabel})
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </div>
 

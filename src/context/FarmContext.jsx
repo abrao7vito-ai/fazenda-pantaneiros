@@ -316,14 +316,28 @@ export function FarmProvider({ children }) {
   const currentRole = currentUser?.role || 'owner';
 
   // --- Auth Handlers & 15-Minute Inactivity Engine ---
-  const login = ({ memberId, pin }) => {
-    const member = members.find((m) => m.id === memberId);
+  const login = ({ identifier, memberId, pin }) => {
+    const rawId = (identifier !== undefined ? identifier : memberId || '').toString().trim();
+    if (!rawId) {
+      return { success: false, error: 'Por favor, informe seu ID, Passaporte ou Nome.' };
+    }
+
+    const query = rawId.toLowerCase();
+
+    const member = members.find((m) => {
+      if (m.id && m.id.toLowerCase() === query) return true;
+      if (m.passport && String(m.passport).trim().toLowerCase() === query) return true;
+      if (m.name && m.name.toLowerCase() === query) return true;
+      if (m.name && m.name.toLowerCase().includes(query)) return true;
+      return false;
+    });
+
     if (!member) {
-      return { success: false, error: 'Conta não encontrada no sistema da fazenda.' };
+      return { success: false, error: 'Conta não encontrada com este Passaporte / ID ou Nome.' };
     }
 
     const expectedPin = member.pin || '1234';
-    if (pin && String(pin).trim() !== expectedPin) {
+    if (!pin || String(pin).trim() !== String(expectedPin).trim()) {
       return { success: false, error: 'Senha / PIN incorreto para esta conta.' };
     }
 
@@ -531,9 +545,10 @@ export function FarmProvider({ children }) {
         prevGoals.map((goal) => {
           if (goal.unitType === 'dols') {
             let updatedCurrent = goal.currentAmount;
-            if (goal.targetMemberId === member.id && goal.status === 'in_progress') {
+            const matchesMember = goal.targetMemberId === member.id || goal.targetMemberId === 'all';
+            if (matchesMember && goal.status === 'in_progress') {
               updatedCurrent += numAmount;
-            } else if (goal.type === 'owner_to_manager' && goal.targetMemberId === member.id) {
+            } else if (goal.type === 'owner_to_manager' && matchesMember) {
               updatedCurrent += numAmount;
             }
             const isFinished = updatedCurrent >= goal.targetAmount;
@@ -746,7 +761,8 @@ export function FarmProvider({ children }) {
   };
 
   const addGoal = ({ title, type, unitType, unitLabel, targetMemberId, targetAmount, deadline, notes }) => {
-    const targetMember = members.find((m) => m.id === targetMemberId);
+    const isAll = targetMemberId === 'all';
+    const targetMember = isAll ? null : members.find((m) => m.id === targetMemberId);
     const newGoal = {
       id: `goal-${Date.now()}`,
       title,
@@ -755,8 +771,8 @@ export function FarmProvider({ children }) {
       unitLabel: unitLabel || (unitType === 'dols' ? 'DOLS' : 'Sacas de Milho'),
       creatorRole: currentRole,
       creatorName: currentUser.name,
-      targetMemberId,
-      targetMemberName: targetMember?.name || 'Não atribuído',
+      targetMemberId: targetMemberId || 'all',
+      targetMemberName: isAll ? 'Toda a Equipe (Geral)' : (targetMember?.name || 'Não atribuído'),
       targetAmount: Number(targetAmount),
       currentAmount: 0,
       deadline,

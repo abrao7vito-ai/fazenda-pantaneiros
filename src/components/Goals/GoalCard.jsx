@@ -124,9 +124,15 @@ export function GoalCard({ goal, onDeliverSacks }) {
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-stone-600">
         <div className="flex items-center gap-1.5">
           <span className="text-stone-400">Atribuído para:</span>
-          <span className="font-semibold text-stone-900 px-2 py-0.5 rounded-lg bg-stone-100 border border-stone-200">
-            {goal.targetMemberName}
-          </span>
+          {goal.targetMemberId === 'all' ? (
+            <span className="font-bold text-emerald-900 px-2.5 py-0.5 rounded-lg bg-emerald-100 border border-emerald-300 flex items-center gap-1">
+              🌾 Toda a Equipe (Meta Coletiva)
+            </span>
+          ) : (
+            <span className="font-semibold text-stone-900 px-2 py-0.5 rounded-lg bg-stone-100 border border-stone-200">
+              {goal.targetMemberName}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1 text-stone-500">
           <span>Criada por:</span>

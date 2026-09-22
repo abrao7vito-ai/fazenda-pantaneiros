@@ -17,7 +17,7 @@ export function SubmitDeliveryModal({ isOpen, onClose, preselectedGoalId = null 
   const memberGoals = goals.filter((g) => {
     if (g.unitType !== 'sacks' || g.status !== 'in_progress') return false;
     if (currentUser.role === 'member') {
-      return g.targetMemberId === currentUser.id;
+      return g.targetMemberId === currentUser.id || g.targetMemberId === 'all';
     }
     return true;
   });
@@ -184,7 +184,7 @@ export function SubmitDeliveryModal({ isOpen, onClose, preselectedGoalId = null 
               >
                 {memberGoals.map((g) => (
                   <option key={g.id} value={g.id}>
-                    {g.title} ({g.currentAmount} / {g.targetAmount} {g.unitLabel})
+                    {g.targetMemberId === 'all' ? '🌾 [Meta Coletiva Geral] ' : ''}{g.title} ({g.currentAmount} / {g.targetAmount} {g.unitLabel})
                   </option>
                 ))}
               </select>

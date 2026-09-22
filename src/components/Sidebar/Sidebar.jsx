@@ -15,7 +15,8 @@ import {
   Clock,
   Key,
   ShieldCheck,
-  Database
+  Database,
+  Building2
 } from 'lucide-react';
 
 export function Sidebar({ 
@@ -64,7 +65,7 @@ export function Sidebar({
 
   const roleBadge = getRoleBadge(currentRole);
 
-  // Nav items: Repartição de Lucros é APENAS visível para Líderes (Dono)
+  // Nav items: Empresa (Lucros, Contas, Conexões) é APENAS visível para o Dono
   const navItems = [
     {
       id: 'goals',
@@ -81,27 +82,18 @@ export function Sidebar({
       icon: LayoutDashboard,
       badge: null,
     },
-    // Repartição de Lucros: SOMENTE visível se for Líder
     ...(isLeader
       ? [
           {
-            id: 'profit',
-            label: 'Repartição de Lucros',
-            subtitle: 'Exclusivo para Líderes',
-            icon: Crown,
-            badge: '👑 Líder',
-            badgeColor: 'bg-amber-50 text-amber-700 border-amber-300',
+            id: 'company',
+            label: 'Painel da Empresa',
+            subtitle: 'Lucros, Contas & Conexões',
+            icon: Building2,
+            badge: '👑 Dono',
+            badgeColor: 'bg-amber-50 text-amber-800 border-amber-300',
           },
         ]
       : []),
-    {
-      id: 'members',
-      label: 'Gestão de Contas',
-      subtitle: 'Criar & Excluir Contas',
-      icon: Users,
-      badge: `${members.length}`,
-      badgeColor: 'bg-stone-100 text-stone-600 border-stone-200',
-    },
   ];
 
   return (
@@ -228,54 +220,6 @@ export function Sidebar({
             );
           })}
         </nav>
-
-        {/* Discord Logs Integration Button (Leader Only) */}
-        {isLeader && (
-          <div className="px-3 pt-1">
-            <button
-              onClick={onOpenDiscordSettings}
-              className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-stone-700 bg-[#f6f7fb] hover:bg-[#5865F2]/10 hover:text-[#5865F2] border border-stone-200 hover:border-[#5865F2]/30 transition-all shadow-sm group"
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="text-base group-hover:scale-110 transition-transform">🎮</span>
-                <div className="text-left">
-                  <div className="font-bold leading-tight">Logs no Discord</div>
-                  <div className="text-[10px] text-stone-400">Canal de Webhook</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${discordSettings?.webhookUrl ? 'bg-emerald-500 ring-2 ring-emerald-200' : 'bg-amber-400'}`}></span>
-                <span className="text-[10px] font-mono text-stone-400 font-bold">
-                  {discordSettings?.webhookUrl ? 'Ativo' : 'Config'}
-                </span>
-              </div>
-            </button>
-          </div>
-        )}
-
-        {/* Supabase Database Cloud Status */}
-        <div className="px-3 pt-1">
-          <button
-            onClick={onOpenDatabaseSettings}
-            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-stone-700 bg-[#f9faf7] hover:bg-emerald-50 hover:text-emerald-900 border border-stone-200 hover:border-emerald-300 transition-all shadow-sm group"
-          >
-            <div className="flex items-center gap-2.5">
-              <Database className="w-4 h-4 text-emerald-700 group-hover:scale-110 transition-transform" />
-              <div className="text-left">
-                <div className="font-bold leading-tight">Banco de Dados</div>
-                <div className="text-[10px] text-stone-400">Nuvem Supabase</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${
-                dbStatus === 'connected' ? 'bg-emerald-500 ring-2 ring-emerald-200' : 'bg-amber-400 animate-pulse'
-              }`}></span>
-              <span className="text-[10px] font-mono text-stone-400 font-bold">
-                {dbStatus === 'connected' ? 'Ativo' : 'SQL'}
-              </span>
-            </div>
-          </button>
-        </div>
       </div>
 
       {/* Bottom Profile Switcher & Reset */}
