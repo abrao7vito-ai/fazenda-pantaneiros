@@ -277,11 +277,11 @@ export function Sidebar({
 
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center text-lg shadow-inner">
-              {currentUser.avatar}
+              {currentUser?.avatar || '👤'}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-bold text-stone-900 truncate">{currentUser.name}</div>
-              <div className="text-[10px] text-stone-500 truncate">{currentUser.roleLabel}</div>
+              <div className="text-xs font-bold text-stone-900 truncate">{currentUser?.name || 'Usuário'}</div>
+              <div className="text-[10px] text-stone-500 truncate">{currentUser?.roleLabel || 'Membro'}</div>
             </div>
           </div>
 

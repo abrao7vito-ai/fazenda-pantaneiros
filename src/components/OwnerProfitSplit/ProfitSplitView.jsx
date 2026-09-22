@@ -447,10 +447,10 @@ export function ProfitSplitView() {
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right font-mono text-stone-500">
-                          {p.sharePercentage.toFixed(1)}%
+                          {(Number(p.sharePercentage) || 0).toFixed(1)}%
                         </td>
                         <td className="py-3 px-3 text-right font-mono font-bold text-stone-900 text-sm">
-                          {formatDols(p.estimatedPayout)}
+                          {formatDols(p.estimatedPayout || 0)}
                         </td>
                       </tr>
                     );

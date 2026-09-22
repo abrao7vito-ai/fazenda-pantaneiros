@@ -53,56 +53,101 @@ const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutos em milissegundos
 export function FarmProvider({ children }) {
   // --- Persistent States ---
   const [members, setMembers] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.MEMBERS);
-    let list = saved ? JSON.parse(saved) : INITIAL_MEMBERS;
-    // Ensure mem-master is always present in list
-    if (!list.some((m) => m.id === 'mem-master' || m.role === 'master')) {
-      const masterAcc = INITIAL_MEMBERS.find((m) => m.id === 'mem-master');
-      if (masterAcc) {
-        list = [masterAcc, ...list];
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.MEMBERS);
+      let list = saved ? JSON.parse(saved) : INITIAL_MEMBERS;
+      if (!Array.isArray(list) || list.length === 0) {
+        list = INITIAL_MEMBERS;
       }
+      // Ensure mem-master is always present in list
+      if (!list.some((m) => m && (m.id === 'mem-master' || m.role === 'master'))) {
+        const masterAcc = INITIAL_MEMBERS.find((m) => m.id === 'mem-master');
+        if (masterAcc) {
+          list = [masterAcc, ...list];
+        }
+      }
+      return list;
+    } catch (e) {
+      console.warn('Erro ao restaurar membros do cache local, usando padrão:', e);
+      return INITIAL_MEMBERS;
     }
-    return list;
   });
 
   const [transactions, setTransactions] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
-    return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
+      const list = saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
+      return Array.isArray(list) ? list : INITIAL_TRANSACTIONS;
+    } catch (e) {
+      return INITIAL_TRANSACTIONS;
+    }
   });
 
   const [goals, setGoals] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.GOALS);
-    return saved ? JSON.parse(saved) : INITIAL_GOALS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.GOALS);
+      const list = saved ? JSON.parse(saved) : INITIAL_GOALS;
+      return Array.isArray(list) ? list : INITIAL_GOALS;
+    } catch (e) {
+      return INITIAL_GOALS;
+    }
   });
 
   const [deliveries, setDeliveries] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.DELIVERIES);
-    return saved ? JSON.parse(saved) : INITIAL_DELIVERIES;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.DELIVERIES);
+      const list = saved ? JSON.parse(saved) : INITIAL_DELIVERIES;
+      return Array.isArray(list) ? list : INITIAL_DELIVERIES;
+    } catch (e) {
+      return INITIAL_DELIVERIES;
+    }
   });
 
   const [splitSettings, setSplitSettings] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    return saved ? JSON.parse(saved) : INITIAL_SPLIT_SETTINGS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+      return saved ? JSON.parse(saved) : INITIAL_SPLIT_SETTINGS;
+    } catch (e) {
+      return INITIAL_SPLIT_SETTINGS;
+    }
   });
 
   const [currentUserId, setCurrentUserId] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-    return saved || 'mem-raquel'; // default is Dona (Raquel Souza)
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+      return saved || 'mem-raquel'; // default is Dona (Raquel Souza)
+    } catch (e) {
+      return 'mem-raquel';
+    }
   });
 
   const [closedCycles, setClosedCycles] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.CYCLES);
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CYCLES);
+      const list = saved ? JSON.parse(saved) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      return [];
+    }
   });
 
   const [companies, setCompanies] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.COMPANIES);
-    return saved ? JSON.parse(saved) : INITIAL_COMPANIES;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.COMPANIES);
+      const list = saved ? JSON.parse(saved) : INITIAL_COMPANIES;
+      return (Array.isArray(list) && list.length > 0) ? list : INITIAL_COMPANIES;
+    } catch (e) {
+      return INITIAL_COMPANIES;
+    }
   });
 
   const [currentCompanyId, setCurrentCompanyId] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_COMPANY);
-    return saved || 'comp-fazenda';
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_COMPANY);
+      return saved || 'comp-fazenda';
+    } catch (e) {
+      return 'comp-fazenda';
+    }
   });
 
   const [discordSettings, setDiscordSettings] = useState(() => {
@@ -349,8 +394,27 @@ export function FarmProvider({ children }) {
     };
   }, []);
 
+  // Guaranteed Fallback User to prevent undefined crashes under any circumstance
+  const fallbackUser = (INITIAL_MEMBERS && INITIAL_MEMBERS[0]) || {
+    id: 'mem-raquel',
+    name: 'Raquel Souza',
+    role: 'owner',
+    roleLabel: 'Dona da Fazenda',
+    companyId: 'comp-fazenda',
+    avatar: '👑',
+    passport: '70',
+    phone: '',
+    pin: '1234',
+    active: true,
+  };
+
   // Current active user object
-  const currentUser = members.find((m) => m.id === currentUserId) || members[0];
+  const currentUser =
+    (members && members.find((m) => m && m.id === currentUserId)) ||
+    (members && members.find((m) => m && m.role === 'owner')) ||
+    (members && members[0]) ||
+    fallbackUser;
+
   const currentRole = currentUser?.role || 'owner';
 
   // --- Auth Handlers & 15-Minute Inactivity Engine ---
@@ -438,8 +502,21 @@ export function FarmProvider({ children }) {
   }, [isAuthenticated]);
 
   // --- Multi-Company Engine (Fazenda, Ferrovia, Taverna & Custom) ---
+  const fallbackCompany = (INITIAL_COMPANIES && INITIAL_COMPANIES[0]) || {
+    id: 'comp-fazenda',
+    name: 'Fazenda Pantaneiros',
+    type: 'farm',
+    code: 'FZ • 01',
+    segment: 'Agropecuária & Café',
+    icon: '🌾',
+    unitLabel: 'Sacos de Café',
+    themeColor: 'emerald',
+  };
+
   const currentCompany =
-    companies.find((c) => c.id === currentCompanyId) || companies[0] || INITIAL_COMPANIES[0];
+    (companies && companies.find((c) => c && c.id === currentCompanyId)) ||
+    (companies && companies[0]) ||
+    fallbackCompany;
 
   const selectCompany = (companyId) => {
     if (companies.some((c) => c.id === companyId)) {
@@ -577,15 +654,18 @@ export function FarmProvider({ children }) {
     companyBalances[c.id] = inc - exp;
   });
 
-  // Scoped Members by Active Company (Master has access to all, others belong to their company or 'all')
+  // Scoped Members by Active Company (excludes Master holding account, which is purely administrative)
   const activeCompanyMembers = members.filter((m) => {
-    if (m.role === 'master' || m.companyId === 'all') return true;
+    if (!m) return false;
+    if (m.role === 'master') return false;
+    if (m.companyId === 'all') return true;
     return (m.companyId || 'comp-fazenda') === currentCompanyId;
   });
 
   // Member stats for Active Company
   const memberContributions = {};
   activeCompanyMembers.forEach((m) => {
+    if (!m || !m.id) return;
     memberContributions[m.id] = {
       member: m,
       totalIncomeAdded: 0,
@@ -597,77 +677,77 @@ export function FarmProvider({ children }) {
   });
 
   activeTransactions.forEach((tx) => {
-    if (memberContributions[tx.memberId]) {
+    if (tx && tx.memberId && memberContributions[tx.memberId]) {
       if (tx.type === 'income') {
-        memberContributions[tx.memberId].totalIncomeAdded += Number(tx.amount);
+        memberContributions[tx.memberId].totalIncomeAdded += Number(tx.amount) || 0;
       } else {
-        memberContributions[tx.memberId].totalExpenseTaken += Number(tx.amount);
+        memberContributions[tx.memberId].totalExpenseTaken += Number(tx.amount) || 0;
       }
     }
   });
 
   activeDeliveries
-    .filter((d) => d.status === 'confirmed')
+    .filter((d) => d && d.status === 'confirmed')
     .forEach((d) => {
-      if (memberContributions[d.memberId]) {
-        memberContributions[d.memberId].sacksDelivered += Number(d.quantity);
+      if (d && d.memberId && memberContributions[d.memberId]) {
+        memberContributions[d.memberId].sacksDelivered += Number(d.quantity) || 0;
       }
     });
 
   activeGoals.forEach((g) => {
-    if (memberContributions[g.targetMemberId]) {
+    if (g && g.targetMemberId && memberContributions[g.targetMemberId]) {
       memberContributions[g.targetMemberId].goalsAssigned.push(g);
-      if (g.status === 'completed' || (g.currentAmount >= g.targetAmount && g.targetAmount > 0)) {
+      if (g.status === 'completed' || (Number(g.currentAmount) >= Number(g.targetAmount) && Number(g.targetAmount) > 0)) {
         memberContributions[g.targetMemberId].goalsCompleted += 1;
       }
     }
   });
 
   const totalMemberIncomeOnly = Object.values(memberContributions)
-    .filter((entry) => entry.member.role === 'member')
-    .reduce((sum, entry) => sum + entry.totalIncomeAdded, 0);
+    .filter((entry) => entry.member?.role === 'member')
+    .reduce((sum, entry) => sum + (Number(entry.totalIncomeAdded) || 0), 0);
 
-  const managersList = activeCompanyMembers.filter((m) => m.role === 'manager');
-  const managerSharePerPerson = managersList.length > 0 ? managersPoolAmount / managersList.length : 0;
+  const managersList = activeCompanyMembers.filter((m) => m?.role === 'manager');
+  const managerSharePerPerson = managersList.length > 0 ? (Number(managersPoolAmount) || 0) / managersList.length : 0;
 
   const memberPayouts = Object.values(memberContributions).map((entry) => {
-    const isOwner = entry.member.role === 'owner';
-    const isManager = entry.member.role === 'manager';
-    const isMember = entry.member.role === 'member';
+    const isOwner = entry.member?.role === 'owner';
+    const isManager = entry.member?.role === 'manager';
+    const isMember = entry.member?.role === 'member';
 
     let estimatedPayout = 0;
     let sharePercentage = 0;
 
     if (isOwner) {
       estimatedPayout = farmReserveAmount;
-      sharePercentage = splitSettings.farmReservePercent;
+      sharePercentage = splitSettings?.farmReservePercent || 30;
     } else if (isManager) {
       estimatedPayout = managerSharePerPerson;
-      sharePercentage = managersList.length > 0 ? splitSettings.managersPercent / managersList.length : 0;
+      sharePercentage = managersList.length > 0 ? (splitSettings?.managersPercent || 20) / managersList.length : 0;
     } else if (isMember) {
       if (totalMemberIncomeOnly > 0) {
-        sharePercentage = (entry.totalIncomeAdded / totalMemberIncomeOnly) * splitSettings.membersPercent;
-        estimatedPayout = (entry.totalIncomeAdded / totalMemberIncomeOnly) * membersPoolAmount;
+        sharePercentage = (entry.totalIncomeAdded / totalMemberIncomeOnly) * (splitSettings?.membersPercent || 50);
+        estimatedPayout = (entry.totalIncomeAdded / totalMemberIncomeOnly) * (Number(membersPoolAmount) || 0);
       } else {
-        const membersList = activeCompanyMembers.filter((m) => m.role === 'member');
-        estimatedPayout = membersList.length > 0 ? membersPoolAmount / membersList.length : 0;
-        sharePercentage = membersList.length > 0 ? splitSettings.membersPercent / membersList.length : 0;
+        const membersList = activeCompanyMembers.filter((m) => m?.role === 'member');
+        estimatedPayout = membersList.length > 0 ? (Number(membersPoolAmount) || 0) / membersList.length : 0;
+        sharePercentage = membersList.length > 0 ? (splitSettings?.membersPercent || 50) / membersList.length : 0;
       }
     }
 
     return {
       ...entry,
-      sharePercentage,
-      estimatedPayout,
+      sharePercentage: Number(sharePercentage) || 0,
+      estimatedPayout: Number(estimatedPayout) || 0,
     };
   });
 
   // Pending deliveries count for managers and owner
-  const pendingDeliveries = activeDeliveries.filter((d) => d.status === 'pending');
+  const pendingDeliveries = activeDeliveries.filter((d) => d && d.status === 'pending');
   const myPendingDeliveries = activeDeliveries.filter((d) => {
-    if (d.status !== 'pending') return false;
+    if (!d || d.status !== 'pending') return false;
     if (currentRole === 'owner' || currentRole === 'master') return true; // Owner/Master can validate all
-    return d.managerId === currentUser.id;
+    return d.managerId === currentUser?.id;
   });
 
   // --- Actions ---
@@ -773,12 +853,12 @@ export function FarmProvider({ children }) {
       id: `deliv-${Date.now()}`,
       companyId: activeCompId,
       goalId: goal?.id || null,
-      goalTitle: goal?.title || `Entrega Avulsa de ${currentCompany.unitLabel}`,
-      memberId: currentUser.id,
-      memberName: currentUser.name,
+      goalTitle: goal?.title || `Entrega Avulsa de ${currentCompany?.unitLabel || 'Produção'}`,
+      memberId: currentUser?.id || 'mem-raquel',
+      memberName: currentUser?.name || 'Membro',
       managerId: manager?.id || '',
       managerName: manager?.name || 'Gerente',
-      itemType: goal?.unitLabel || currentCompany.unitLabel,
+      itemType: goal?.unitLabel || currentCompany?.unitLabel || 'Unidades',
       quantity: qty,
       status: 'pending',
       submittedAt: new Date().toISOString(),
@@ -795,7 +875,7 @@ export function FarmProvider({ children }) {
     }
 
     const discordMessage = generateDeliverySubmissionDiscordMessage({
-      memberName: currentUser.name,
+      memberName: currentUser?.name || 'Membro',
       managerName: manager?.name || 'Gerente',
       quantity: qty,
       itemType: newDelivery.itemType,
@@ -806,7 +886,7 @@ export function FarmProvider({ children }) {
     // Automatic Discord Webhook Log for Delivery Submission
     if (discordSettings?.enabled && discordSettings?.autoDeliveries && discordSettings?.webhookUrl) {
       sendDeliverySubmittedDiscordLog(discordSettings.webhookUrl, {
-        memberName: currentUser.name,
+        memberName: currentUser?.name || 'Membro',
         managerName: manager?.name || 'Gerente',
         quantity: qty,
         itemType: newDelivery.itemType,
@@ -863,7 +943,7 @@ export function FarmProvider({ children }) {
       supabase.from('deliveries').update({
         status: 'confirmed',
         confirmed_at: confirmedAt,
-        confirmed_by: currentUser.name,
+        confirmed_by: currentUser?.name || 'Gerência',
       }).eq('id', deliveryId).then();
 
       if (updatedGoal) {
@@ -876,7 +956,7 @@ export function FarmProvider({ children }) {
 
     const discordConfirmation = generateDeliveryConfirmationDiscordMessage({
       memberName: delivery.memberName,
-      managerName: currentUser.name,
+      managerName: currentUser?.name || 'Gerência',
       quantity: qty,
       itemType: delivery.itemType,
       confirmedTotal: updatedGoal ? updatedGoal.currentAmount : qty,
@@ -888,18 +968,20 @@ export function FarmProvider({ children }) {
     if (discordSettings?.enabled && discordSettings?.autoDeliveries && discordSettings?.webhookUrl) {
       sendDeliveryConfirmedDiscordLog(discordSettings.webhookUrl, {
         memberName: delivery.memberName,
-        managerName: currentUser.name,
+        managerName: currentUser?.name || 'Gerência',
         quantity: qty,
         itemType: delivery.itemType,
         confirmedTotal: updatedGoal ? updatedGoal.currentAmount : qty,
         targetTotal: updatedGoal ? updatedGoal.targetAmount : null,
-      }).catch((err) => console.error('Erro ao enviar log para o Discord:', err));
+        goalTitle: delivery.goalTitle,
+        unitLabel: delivery.itemType,
+      }).catch((err) => console.error('Erro ao enviar confirmação para o Discord:', err));
     }
 
-    return { delivery, discordConfirmation };
+    return { updatedDelivery: delivery, discordConfirmation };
   };
 
-  const rejectDelivery = (deliveryId, reason) => {
+  const rejectDelivery = ({ deliveryId, reason }) => {
     const rejectedAt = new Date().toISOString();
     setDeliveries((prev) =>
       prev.map((d) =>
@@ -908,7 +990,7 @@ export function FarmProvider({ children }) {
               ...d,
               status: 'rejected',
               rejectionReason: reason || 'Não conferido ou incorreto',
-              rejectedBy: currentUser.name,
+              rejectedBy: currentUser?.name || 'Gerência',
               rejectedAt,
             }
           : d
@@ -919,7 +1001,7 @@ export function FarmProvider({ children }) {
       supabase.from('deliveries').update({
         status: 'rejected',
         rejection_reason: reason || 'Não conferido ou incorreto',
-        rejected_by: currentUser.name,
+        rejected_by: currentUser?.name || 'Gerência',
         rejected_at: rejectedAt,
       }).eq('id', deliveryId).then();
     }
@@ -935,9 +1017,9 @@ export function FarmProvider({ children }) {
       title,
       type: type || (currentRole === 'owner' ? 'owner_to_manager' : 'manager_to_member'),
       unitType: unitType || 'sacks', // 'sacks' | 'dols'
-      unitLabel: unitLabel || (unitType === 'dols' ? 'DOLS' : currentCompany.unitLabel),
+      unitLabel: unitLabel || (unitType === 'dols' ? 'DOLS' : currentCompany?.unitLabel || 'Unidades'),
       creatorRole: currentRole,
-      creatorName: currentUser.name,
+      creatorName: currentUser?.name || 'Liderança',
       targetMemberId: targetMemberId || 'all',
       targetMemberName: isAll ? 'Toda a Equipe (Geral)' : (targetMember?.name || 'Não atribuído'),
       targetAmount: Number(targetAmount),
@@ -1066,18 +1148,18 @@ export function FarmProvider({ children }) {
       title: title || `Fechamento ${new Date().toLocaleDateString('pt-BR')}`,
       date: new Date().toISOString(),
       periodNote: periodNote || '',
-      closedBy: currentUser.name,
+      closedBy: currentUser?.name || 'Liderança',
       totalIncome,
       totalExpense,
       netProfit,
       splitSettings: { ...splitSettings },
       payouts: memberPayouts.map((p) => ({
-        memberId: p.member.id,
-        name: p.member.name,
-        role: p.member.role,
-        amountAdded: p.totalIncomeAdded,
-        payoutAmount: p.estimatedPayout,
-        sharePercentage: p.sharePercentage,
+        memberId: p.member?.id || '',
+        name: p.member?.name || 'Membro',
+        role: p.member?.role || 'member',
+        amountAdded: Number(p.totalIncomeAdded) || 0,
+        payoutAmount: Number(p.estimatedPayout) || 0,
+        sharePercentage: Number(p.sharePercentage) || 0,
       })),
       farmReserveAmount,
       managersPoolAmount,
@@ -1103,7 +1185,7 @@ export function FarmProvider({ children }) {
         membersPoolAmount,
         splitSettings,
         payouts: cycleRecord.payouts,
-        closedBy: currentUser.name,
+        closedBy: currentUser?.name || 'Liderança',
       }).catch((err) => console.error('Erro ao enviar log de repasses para o Discord:', err));
     }
 

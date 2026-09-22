@@ -49,12 +49,12 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, on
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-300 flex items-center justify-center text-2xl shadow-inner">
-              {isMaster ? '⚡' : (currentCompany.icon || '👑')}
+              {isMaster ? '⚡' : (currentCompany?.icon || '👑')}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-extrabold text-stone-900">
-                  {activeTab === 'holding' ? 'Painel Master de Empresas' : currentCompany.name}
+                  {activeTab === 'holding' ? 'Painel Master de Empresas' : (currentCompany?.name || 'Empresa')}
                 </h2>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide border ${
                   isMaster 
@@ -67,7 +67,7 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, on
               <p className="text-xs text-stone-500 mt-0.5">
                 {activeTab === 'holding' 
                   ? 'Visão consolidada da holding e controle de todos os negócios.' 
-                  : `Gestão estratégica: lucros, equipe e conexões de ${currentCompany.name}.`}
+                  : `Gestão estratégica: lucros, equipe e conexões de ${currentCompany?.name || 'sua empresa'}.`}
               </p>
             </div>
           </div>

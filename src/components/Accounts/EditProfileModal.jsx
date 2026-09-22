@@ -40,13 +40,13 @@ export function EditProfileModal({ isOpen, onClose }) {
       avatar,
     };
 
-    if (currentUser.role !== 'master' && companyId) {
+    if (currentUser?.role !== 'master' && companyId) {
       updates.companyId = companyId;
     }
 
     // If attempting to change PIN
     if (newPin || confirmNewPin || currentPinInput) {
-      if (currentUser.pin && currentPinInput !== currentUser.pin) {
+      if (currentUser?.pin && currentPinInput !== currentUser.pin) {
         setErrorMsg('O PIN atual informado está incorreto.');
         return;
       }
@@ -64,7 +64,9 @@ export function EditProfileModal({ isOpen, onClose }) {
       updates.pin = newPin.trim();
     }
 
-    updateMember(currentUser.id, updates);
+    if (currentUser?.id) {
+      updateMember(currentUser.id, updates);
+    }
     setSuccessMsg('Perfil e credenciais atualizados com sucesso!');
 
     setTimeout(() => {

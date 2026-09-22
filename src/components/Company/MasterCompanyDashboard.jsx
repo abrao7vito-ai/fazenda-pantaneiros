@@ -93,7 +93,7 @@ export function MasterCompanyDashboard({ onOpenCreateCompany }) {
               Metas de Produção em Curso
             </div>
             <div className="text-2xl font-mono font-extrabold text-white mt-1">
-              {allGoals.filter((g) => g.status === 'in_progress').length}
+              {(allGoals || []).filter((g) => g && g.status === 'in_progress').length}
             </div>
             <div className="text-[10px] text-stone-400 mt-0.5">
               Contratos e entregas ativas
@@ -117,8 +117,8 @@ export function MasterCompanyDashboard({ onOpenCreateCompany }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {companies.map((comp) => {
             const isSelected = comp.id === currentCompanyId;
-            const balance = companyBalances[comp.id] != null ? companyBalances[comp.id] : 0;
-            const compGoals = allGoals.filter((g) => (g.companyId || 'comp-fazenda') === comp.id);
+            const balance = (companyBalances && companyBalances[comp.id] != null) ? companyBalances[comp.id] : 0;
+            const compGoals = (allGoals || []).filter((g) => g && (g.companyId || 'comp-fazenda') === comp.id);
             const activeCompGoals = compGoals.filter((g) => g.status === 'in_progress').length;
 
             return (

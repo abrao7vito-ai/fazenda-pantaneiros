@@ -228,13 +228,13 @@ function AppLayout() {
               title="Clique para editar seu Perfil e PIN"
             >
               <div className="w-9 h-9 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center text-base shadow-inner group-hover:scale-105 transition-transform">
-                {currentUser.avatar}
+                {currentUser?.avatar || '👤'}
               </div>
               <div className="hidden lg:block text-left">
                 <div className="text-xs font-bold text-stone-900 leading-tight flex items-center gap-1">
-                  <span>{currentUser.name}</span>
+                  <span>{currentUser?.name || 'Usuário'}</span>
                 </div>
-                <div className="text-[10px] text-ouro-700 font-semibold">{currentUser.roleLabel}</div>
+                <div className="text-[10px] text-ouro-700 font-semibold">{currentUser?.roleLabel || 'Membro'}</div>
               </div>
             </button>
 

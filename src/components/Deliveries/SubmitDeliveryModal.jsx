@@ -17,8 +17,8 @@ export function SubmitDeliveryModal({ isOpen, onClose, preselectedGoalId = null 
   const managers = companyStaff.filter((m) => m.role === 'manager' || m.role === 'owner' || m.role === 'master');
   const memberGoals = goals.filter((g) => {
     if (g.unitType !== 'sacks' || g.status !== 'in_progress') return false;
-    if (currentUser.role === 'member') {
-      return g.targetMemberId === currentUser.id || g.targetMemberId === 'all';
+    if (currentUser?.role === 'member') {
+      return g.targetMemberId === currentUser?.id || g.targetMemberId === 'all';
     }
     return true;
   });
@@ -43,7 +43,7 @@ export function SubmitDeliveryModal({ isOpen, onClose, preselectedGoalId = null 
   const numQty = parseFloat(quantity) || 0;
 
   const livePreview = generateDeliverySubmissionDiscordMessage({
-    memberName: currentUser.name,
+    memberName: currentUser?.name || 'Membro',
     managerName: selectedManager?.name || 'Gerente',
     quantity: numQty,
     itemType,
@@ -165,10 +165,10 @@ export function SubmitDeliveryModal({ isOpen, onClose, preselectedGoalId = null 
                 Quem está Entregando (Sua Conta Conectada):
               </label>
               <div className="flex items-center gap-2.5 p-2 rounded-xl bg-stone-100 border border-stone-200">
-                <span className="text-xl">{currentUser.avatar}</span>
+                <span className="text-xl">{currentUser?.avatar || '👤'}</span>
                 <div className="min-w-0">
-                  <div className="text-xs font-bold text-stone-900 truncate">{currentUser.name}</div>
-                  <div className="text-[10px] text-stone-500 truncate">{currentUser.roleLabel} (identificado automaticamente pelo login)</div>
+                  <div className="text-xs font-bold text-stone-900 truncate">{currentUser?.name || 'Membro'}</div>
+                  <div className="text-[10px] text-stone-500 truncate">{currentUser?.roleLabel || 'Membro'} (identificado automaticamente pelo login)</div>
                 </div>
               </div>
             </div>

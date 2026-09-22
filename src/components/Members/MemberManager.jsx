@@ -52,12 +52,16 @@ export function MemberManager() {
   const managersCount = baseMembersList.filter((m) => m.role === 'manager').length;
   const membersCount = baseMembersList.filter((m) => m.role === 'member').length;
 
-  const filteredMembers = baseMembersList.filter((m) => {
+  const filteredMembers = (baseMembersList || []).filter((m) => {
+    if (!m) return false;
     const matchesFilter = activeFilter === 'all' ? true : m.role === activeFilter;
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return matchesFilter;
+
     const matchesSearch = 
-      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (m.passport && m.passport.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (m.phone && m.phone.toLowerCase().includes(searchQuery.toLowerCase()));
+      (m.name || '').toLowerCase().includes(q) ||
+      String(m.passport || '').toLowerCase().includes(q) ||
+      String(m.phone || '').toLowerCase().includes(q);
 
     return matchesFilter && matchesSearch;
   });

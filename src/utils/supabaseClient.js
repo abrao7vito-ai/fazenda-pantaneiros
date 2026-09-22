@@ -21,12 +21,12 @@ export function toLocalMember(row) {
   if (!row) return null;
   return {
     id: row.id,
-    name: row.name,
-    role: row.role,
-    roleLabel: row.role_label,
+    name: row.name || 'Sem nome',
+    role: row.role || 'member',
+    roleLabel: row.role_label || (row.role === 'owner' ? 'Líder / Dono' : row.role === 'manager' ? 'Gerente' : 'Membro'),
     companyId: row.company_id || (row.role === 'master' ? 'all' : 'comp-fazenda'),
-    avatar: row.avatar,
-    passport: row.passport || '',
+    avatar: row.avatar || (row.role === 'owner' ? '👑' : row.role === 'manager' ? '👔' : '🌾'),
+    passport: row.passport ? String(row.passport) : '',
     phone: row.phone || '',
     pin: row.pin || '1234',
     active: row.active ?? true,
