@@ -17,7 +17,7 @@ export function CompanySwitcher({ onOpenCreateCompany }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  const isOwner = currentRole === 'owner' || currentRole === 'master';
+  const isMaster = currentRole === 'master';
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -30,14 +30,44 @@ export function CompanySwitcher({ onOpenCreateCompany }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Strict SaaS Tenant Isolation:
+  // Owners, managers, and members ONLY see their own company badge.
+  // They cannot click, cannot switch, cannot see other businesses, and cannot see total holding.
+  if (!isMaster) {
+    return (
+      <div className="w-full flex items-center justify-between p-2.5 rounded-2xl bg-white border border-stone-200/90 shadow-card text-left select-none">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-300/80 flex items-center justify-center text-lg shrink-0 shadow-inner">
+            {currentCompany?.icon || '🌾'}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-stone-900 truncate">
+                {currentCompany?.name}
+              </span>
+            </div>
+            <div className="text-[10px] text-stone-400 font-mono truncate">
+              {currentCompany?.code || currentCompany?.segment}
+            </div>
+          </div>
+        </div>
+
+        <div className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[9px] font-bold text-emerald-800 shrink-0">
+          Sua Empresa
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative select-none" ref={dropdownRef}>
       
-      {/* Switcher Trigger Button */}
+      {/* Switcher Trigger Button (Master Only) */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-2.5 rounded-2xl bg-white hover:bg-stone-50 border border-stone-200/90 shadow-card transition-all text-left group"
+        className="w-full flex items-center justify-between p-2.5 rounded-2xl bg-white hover:bg-stone-50 border border-stone-200/90 shadow-card transition-all text-left group cursor-pointer"
+        title="Holding Master • Alternar entre empresas"
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-300/80 flex items-center justify-center text-lg shrink-0 shadow-inner group-hover:scale-105 transition-transform">

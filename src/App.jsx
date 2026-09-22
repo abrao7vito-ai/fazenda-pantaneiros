@@ -80,8 +80,10 @@ function AppLayout() {
         };
       case 'company':
         return {
-          title: 'Painel Master de Empresas',
-          subtitle: 'Holding Pantaneiros • Controle de todos os negócios, lucros e conexões',
+          title: isMaster ? 'Painel Master de Empresas' : `Painel de Gestão • ${currentCompany?.name}`,
+          subtitle: isMaster
+            ? 'Holding Master • Controle de todos os negócios e filiais'
+            : `Gestão Estratégica, Lucros e Equipe de ${currentCompany?.name}`,
         };
       default:
         return {
@@ -275,7 +277,7 @@ function AppLayout() {
           <div className="flex items-center gap-2">
             <span className="font-bold text-stone-800">{currentCompany?.icon} {currentCompany?.name}</span>
             <span>•</span>
-            <span>{currentCompany?.code} • Holding Pantaneiros</span>
+            <span>{currentCompany?.code} • {isMaster ? 'Holding Master' : (currentCompany?.segment || 'Empresa')}</span>
           </div>
           <div className="font-mono text-[11px] text-stone-400">
             Valores em DOLS & {currentCompany?.unitLabel}

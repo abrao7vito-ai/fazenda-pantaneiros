@@ -3,7 +3,8 @@ import { useFarm } from '../../context/FarmContext';
 import { X, UserPlus, Shield, Wheat, Briefcase, Sparkles, Key } from 'lucide-react';
 
 export function CreateAccountModal({ isOpen, onClose }) {
-  const { addMember, companies, currentCompanyId } = useFarm();
+  const { addMember, companies, currentCompanyId, currentCompany, currentRole } = useFarm();
+  const isMaster = currentRole === 'master';
 
   const [companyId, setCompanyId] = useState(currentCompanyId || 'comp-fazenda');
   const [name, setName] = useState('');
@@ -40,7 +41,7 @@ export function CreateAccountModal({ isOpen, onClose }) {
       passport: passport.trim(),
       phone: phone.trim(),
       pin: pin.trim(),
-      companyId,
+      companyId: isMaster ? companyId : (currentCompany?.id || currentCompanyId || 'comp-fazenda'),
     });
 
     // Reset and close
@@ -77,25 +78,42 @@ export function CreateAccountModal({ isOpen, onClose }) {
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           
           {/* Company Target Selector */}
-          <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-1.5">
-              Empresa / Negócio do Funcionário: *
-            </label>
-            <select
-              value={companyId}
-              onChange={(e) => setCompanyId(e.target.value)}
-              className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3.5 py-2.5 text-xs font-bold text-stone-800 focus:bg-white focus:border-amber-400 outline-none transition-colors cursor-pointer"
-            >
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.icon} {c.name} ({c.segment})
-                </option>
-              ))}
-            </select>
-            <p className="text-[10px] text-stone-500 mt-1">
-              Este funcionário trabalhará exclusivamente nesta empresa selecionada.
-            </p>
-          </div>
+          {isMaster ? (
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                Empresa / Negócio do Funcionário: *
+              </label>
+              <select
+                value={companyId}
+                onChange={(e) => setCompanyId(e.target.value)}
+                className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3.5 py-2.5 text-xs font-bold text-stone-800 focus:bg-white focus:border-amber-400 outline-none transition-colors cursor-pointer"
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.icon} {c.name} ({c.segment})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-stone-500 mt-1">
+                Como Administrador Master, você pode vincular este funcionário a qualquer empresa.
+              </p>
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-2xl bg-[#fcfbf7] border border-stone-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white border border-stone-200 flex items-center justify-center text-xl shadow-xs">
+                  {currentCompany?.icon || '🏢'}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-stone-900">{currentCompany?.name}</div>
+                  <div className="text-[10px] text-stone-500">Contratação vinculada exclusivamente à sua empresa</div>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
+                Sua Empresa
+              </span>
+            </div>
+          )}
 
           {/* Role selector */}
           <div>

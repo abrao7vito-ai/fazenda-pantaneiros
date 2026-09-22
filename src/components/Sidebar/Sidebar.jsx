@@ -120,7 +120,7 @@ export function Sidebar({
               {
                 id: 'company',
                 label: 'Painel da Empresa',
-                subtitle: 'Holding Master, Lucros & Equipe',
+                subtitle: 'Lucros, Equipe & Conexões',
                 icon: Building2,
                 badge: '👑 Dono',
                 badgeColor: 'bg-amber-50 text-amber-800 border-amber-300',

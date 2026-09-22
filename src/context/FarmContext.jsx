@@ -449,6 +449,15 @@ export function FarmProvider({ children }) {
     lastActivityRef.current = Date.now();
     sessionStorage.setItem('pantaneiros_auth_v1', 'true');
     sessionStorage.setItem('pantaneiros_user_id', member.id);
+
+    // Strict SaaS Multi-Tenant Isolation:
+    // When a non-master user logs in, instantly lock to their assigned company
+    if (member.role !== 'master') {
+      const userCompany = member.companyId && member.companyId !== 'all' ? member.companyId : 'comp-fazenda';
+      setCurrentCompanyId(userCompany);
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_COMPANY, userCompany);
+    }
+
     return { success: true, member };
   };
 
@@ -518,13 +527,34 @@ export function FarmProvider({ children }) {
     (companies && companies[0]) ||
     fallbackCompany;
 
+  // Strict SaaS Multi-Tenant Isolation:
+  // Non-master users are locked to their own company at all times.
+  useEffect(() => {
+    if (isAuthenticated && currentRole !== 'master' && currentUser?.companyId) {
+      const userCompany = currentUser.companyId !== 'all' ? currentUser.companyId : 'comp-fazenda';
+      if (currentCompanyId !== userCompany) {
+        setCurrentCompanyId(userCompany);
+      }
+    }
+  }, [isAuthenticated, currentRole, currentUser?.companyId, currentCompanyId]);
+
   const selectCompany = (companyId) => {
+    // Only master account can switch companies
+    if (currentRole !== 'master') {
+      console.warn('Acesso negado: apenas o Administrador Master pode alternar entre empresas.');
+      return;
+    }
     if (companies.some((c) => c.id === companyId)) {
       setCurrentCompanyId(companyId);
     }
   };
 
   const addCompany = ({ name, segment, icon, unitLabel, code, initialBalance = 0, description = '' }) => {
+    if (currentRole !== 'master') {
+      alert('Acesso restrito: apenas o Administrador Master pode fundar novas empresas.');
+      return null;
+    }
+
     const newId = `comp-${Date.now()}`;
     const newComp = {
       id: newId,
@@ -575,6 +605,10 @@ export function FarmProvider({ children }) {
   };
 
   const updateCompany = (companyId, updates) => {
+    if (currentRole !== 'master') {
+      alert('Acesso restrito: apenas o Administrador Master pode alterar dados estruturais de empresas.');
+      return;
+    }
     const updated = companies.map((c) => (c.id === companyId ? { ...c, ...updates } : c));
     setCompanies(updated);
     if (supabase) {
@@ -587,6 +621,10 @@ export function FarmProvider({ children }) {
   };
 
   const deleteCompany = (companyId) => {
+    if (currentRole !== 'master') {
+      alert('Acesso restrito: apenas o Administrador Master pode excluir empresas.');
+      return false;
+    }
     if (companyId === 'comp-fazenda') {
       alert('A Fazenda Pantaneiros é a matriz principal e não pode ser excluída.');
       return false;
@@ -1234,20 +1272,40 @@ export function FarmProvider({ children }) {
     setClosedCycles([]);
   };
 
+  const isMaster = currentRole === 'master';
+
+  // Strict SaaS Multi-Tenant Isolation:
+  // Master sees all companies in the holding.
+  // Owners, Managers, and Members ONLY see their own company and cannot access others!
+  const userCompanyId = currentUser?.companyId && currentUser.companyId !== 'all' 
+    ? currentUser.companyId 
+    : 'comp-fazenda';
+
+  const visibleCompanies = isMaster
+    ? companies
+    : companies.filter((c) => c.id === userCompanyId);
+
+  const safeVisibleCompanies = visibleCompanies.length > 0 ? visibleCompanies : [currentCompany];
+
+  const exposedConsolidatedBalance = isMaster ? consolidatedBalance : totalBalance;
+  const exposedConsolidatedIncome = isMaster ? consolidatedIncome : totalIncome;
+  const exposedCompanyBalances = isMaster ? companyBalances : { [currentCompanyId]: totalBalance };
+
   return (
     <FarmContext.Provider
       value={{
         // Multi-Company (Holding & Segmentos: Fazenda, Ferrovia, Taverna)
-        companies,
+        companies: safeVisibleCompanies,
+        allCompanies: companies,
         currentCompanyId,
         currentCompany,
         selectCompany,
         addCompany,
         updateCompany,
         deleteCompany,
-        consolidatedBalance,
-        consolidatedIncome,
-        companyBalances,
+        consolidatedBalance: exposedConsolidatedBalance,
+        consolidatedIncome: exposedConsolidatedIncome,
+        companyBalances: exposedCompanyBalances,
         // Members & Users
         members,
         activeCompanyMembers,

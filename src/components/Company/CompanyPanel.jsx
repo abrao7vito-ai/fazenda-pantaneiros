@@ -20,11 +20,19 @@ import {
 
 export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, onOpenCreateCompany }) {
   const { currentRole, currentCompany, discordSettings, dbStatus } = useFarm();
-  const [activeTab, setActiveTab] = useState('holding'); // 'holding' | 'lucros' | 'contas' | 'conexoes'
-
   const isMaster = currentRole === 'master';
   const isOwner = currentRole === 'owner';
   const hasAccess = isMaster || isOwner;
+
+  // If Master, default to holding; If Owner, default to lucros of their company
+  const [activeTab, setActiveTab] = useState(isMaster ? 'holding' : 'lucros');
+
+  // Prevent any non-master from ever viewing the holding tab
+  useEffect(() => {
+    if (!isMaster && activeTab === 'holding') {
+      setActiveTab('lucros');
+    }
+  }, [isMaster, activeTab]);
 
   // Safety: If not master or owner, display locked message
   if (!hasAccess) {
@@ -33,9 +41,9 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, on
         <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200">
           <Lock className="w-8 h-8" />
         </div>
-        <h3 className="text-lg font-bold text-stone-900">Acesso Restrito ao Master / Dono</h3>
+        <h3 className="text-lg font-bold text-stone-900">Acesso Restrito ao Dono</h3>
         <p className="text-xs text-stone-500 mt-2">
-          O Painel de Empresas e Holding é reservado exclusivamente para o Administrador Master e Proprietários.
+          O Painel da Empresa é reservado exclusivamente para os proprietários.
         </p>
       </div>
     );
@@ -49,23 +57,23 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, on
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-300 flex items-center justify-center text-2xl shadow-inner">
-              {isMaster ? '⚡' : (currentCompany?.icon || '👑')}
+              {isMaster && activeTab === 'holding' ? '⚡' : (currentCompany?.icon || '👑')}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-extrabold text-stone-900">
-                  {activeTab === 'holding' ? 'Painel Master de Empresas' : (currentCompany?.name || 'Empresa')}
+                  {isMaster && activeTab === 'holding' ? 'Painel Master de Empresas' : (currentCompany?.name || 'Sua Empresa')}
                 </h2>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide border ${
                   isMaster 
                     ? 'bg-purple-100 text-purple-900 border-purple-300' 
                     : 'bg-amber-100 text-amber-900 border-amber-300'
                 }`}>
-                  {isMaster ? '⚡ Holding Master' : 'Exclusivo Dono'}
+                  {isMaster ? '⚡ Holding Master' : '👑 Dono da Empresa'}
                 </span>
               </div>
               <p className="text-xs text-stone-500 mt-0.5">
-                {activeTab === 'holding' 
+                {isMaster && activeTab === 'holding' 
                   ? 'Visão consolidada da holding e controle de todos os negócios.' 
                   : `Gestão estratégica: lucros, equipe e conexões de ${currentCompany?.name || 'sua empresa'}.`}
               </p>
@@ -74,17 +82,20 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, on
 
           {/* Tab Navigation Pill Bar */}
           <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-stone-100/90 rounded-2xl border border-stone-200/80 self-start sm:self-auto">
-            <button
-              onClick={() => setActiveTab('holding')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'holding'
-                  ? 'bg-stone-900 text-white shadow-sm'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5 text-amber-400" />
-              <span>Holding Master</span>
-            </button>
+            {/* Holding Master Tab (Master Only) */}
+            {isMaster && (
+              <button
+                onClick={() => setActiveTab('holding')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'holding'
+                    ? 'bg-stone-900 text-white shadow-sm'
+                    : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 text-amber-400" />
+                <span>Holding Master</span>
+              </button>
+            )}
 
             <button
               onClick={() => setActiveTab('lucros')}
@@ -125,8 +136,8 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, on
         </div>
       </div>
 
-      {/* Tab 1: Holding Master Dashboard */}
-      {activeTab === 'holding' && (
+      {/* Tab 1: Holding Master Dashboard (Master Only) */}
+      {isMaster && activeTab === 'holding' && (
         <MasterCompanyDashboard onOpenCreateCompany={onOpenCreateCompany} />
       )}
 
