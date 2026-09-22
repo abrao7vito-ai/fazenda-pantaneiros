@@ -186,6 +186,36 @@ function buildRoutePanelPayload(routes, selectedRouteId = null) {
   activeSelectedRouteId = route.id;
 
   const items = route.items || [];
+  const isAnimalRoute = (route.title || '').toLowerCase().includes('animal') || (route.id && route.id.includes('animal')) || items.some(it => it.perRoute);
+
+  let totalRoutesReady = 0;
+  let bottleneckItem = null;
+  let neededForNext = 0;
+
+  if (isAnimalRoute) {
+    totalRoutesReady = items.length === 0 ? 0 : Math.min(
+      ...items.map((it) => {
+        const perRoute = Number(it.perRoute || (it.targetAmount >= 2000 ? 100 : it.targetAmount >= 400 ? 20 : 20));
+        return Math.floor(Number(it.currentAmount || 0) / perRoute);
+      })
+    );
+
+    const notReady = items.map((it) => {
+      const perRoute = Number(it.perRoute || (it.targetAmount >= 2000 ? 100 : it.targetAmount >= 400 ? 20 : 20));
+      return {
+        ...it,
+        perRoute,
+        needed: ((totalRoutesReady + 1) * perRoute) - Number(it.currentAmount || 0),
+      };
+    }).filter(i => i.needed > 0);
+
+    if (notReady.length > 0) {
+      notReady.sort((a, b) => a.needed - b.needed);
+      bottleneckItem = notReady[0];
+      neededForNext = bottleneckItem.needed;
+    }
+  }
+
   const completedItemsCount = items.filter(
     (it) => it.completed || Number(it.currentAmount) >= Number(it.targetAmount)
   ).length;
@@ -195,11 +225,21 @@ function buildRoutePanelPayload(routes, selectedRouteId = null) {
   // Status e Cores
   let embedColor = 0xd97706; // Amber (Aguardando)
   let statusBadge = '🟡 AGUARDANDO SAÍDA';
-  if (route.status === 'in_progress') {
+  if (isAnimalRoute) {
+    if (totalRoutesReady >= 20) {
+      embedColor = 0x16a34a; // Verde
+      statusBadge = '🟢 META MÁXIMA DE 20 ROTAS PRONTA';
+    } else if (totalRoutesReady >= 1) {
+      embedColor = 0x2563eb; // Azul
+      statusBadge = `🟢 ${totalRoutesReady} ROTA(S) PRONTA(S) P/ DESPACHO`;
+    } else {
+      embedColor = 0xd97706; // Amber
+      statusBadge = '⚠️ ESTOQUE INSUFICIENTE (< 1 ROTA)';
+    }
+  } else if (route.status === 'in_progress') {
     embedColor = 0x2563eb; // Azul (Em Viagem)
     statusBadge = '🔵 EM VIAGEM / CARREGANDO';
-  }
-  if (route.status === 'completed') {
+  } else if (route.status === 'completed') {
     embedColor = 0x16a34a; // Verde (Entregue)
     statusBadge = '🟢 MISSÃO ENTREGUE & SALDO CREDITADO';
   }
@@ -212,6 +252,13 @@ function buildRoutePanelPayload(routes, selectedRouteId = null) {
     const target = Number(it.targetAmount || 1);
     const unit = it.unit || 'un';
     const pct = Math.min(100, Math.round((current / target) * 100));
+    const icon = it.icon || '';
+
+    if (isAnimalRoute) {
+      const perRoute = Number(it.perRoute || (it.targetAmount >= 2000 ? 100 : 20));
+      const routesCovered = Math.floor(current / perRoute);
+      return `${checkEmoji} ${icon} **${it.name}**: \`${current}/${target}\` (${perRoute}x/rota • Cobre **${routesCovered} rotas**) ${isDone ? '*(Meta 20x OK)*' : ''}`;
+    }
 
     return `${checkEmoji} **${it.name}**: \`${current}/${target} ${unit}\` (${pct}%) ${isDone ? '*(Completo)*' : ''}`;
   }).join('\n');
@@ -219,7 +266,7 @@ function buildRoutePanelPayload(routes, selectedRouteId = null) {
   // Histórico de Carregamento (Exibe apenas a última log recente)
   const logs = (route.logs || []).slice(0, 1);
   const logsText = logs.length > 0
-    ? logs.map((l) => `• **${l.userName}** carregou \`+${l.amount}\` de *${l.itemName}* (<t:${Math.floor(new Date(l.timestamp).getTime() / 1000)}:R>)`).join('\n')
+    ? logs.map((l) => `• **${l.userName}** ${l.action === 'dispatch' ? 'despachou' : 'carregou'} \`+${l.amount}\` de *${l.itemName}* (<t:${Math.floor(new Date(l.timestamp).getTime() / 1000)}:R>)`).join('\n')
     : '*Nenhum carregamento recente registrado ainda.*';
 
   // Embed Principal
@@ -228,15 +275,20 @@ function buildRoutePanelPayload(routes, selectedRouteId = null) {
     .setTitle(`${route.icon || '🚂'} ${route.title.toUpperCase()}`)
     .setDescription(
       `**Status:** \`${statusBadge}\`\n` +
-      `💰 **Recompensa da Rota:** \`$${Number(route.rewardAmount).toLocaleString('pt-BR')} DOLS\`\n` +
-      `${route.startedBy ? `👤 **Responsável/Maquinista:** \`${route.startedBy}\`\n` : ''}` +
-      `${route.completedBy ? `🏆 **Entregue por:** \`${route.completedBy}\`\n` : ''}` +
-      `\n📊 **Progresso Geral da Carga:**\n${renderProgressBar(completedItemsCount, totalItemsCount, 14)}\n` +
-      `**${completedItemsCount} de ${totalItemsCount} itens totalmente carregados**\n\n` +
-      `📦 **Checklist de Itens Exigidos:**\n${itemsText || 'Nenhum item exigido.'}\n\n` +
-      `📜 **Último Carregamento Registrado:**\n${logsText}`
+      `💰 **Recompensa por Viagem:** \`$${Number(route.rewardAmount).toLocaleString('pt-BR')} DOLS\`\n` +
+      `${route.startedBy ? `👤 **Responsável:** \`${route.startedBy}\`\n` : ''}` +
+      (isAnimalRoute
+        ? `\n🎯 **Meta de Produção:** \`20 Rotas\`\n` +
+          `🚂 **Rotas Prontas no Estoque:** \`${totalRoutesReady} de 20 Rotas\`\n` +
+          `${bottleneckItem ? `⚠️ **Gargalo p/ Rota #${totalRoutesReady + 1}:** Faltam \`${neededForNext}x ${bottleneckItem.name}\`\n` : '🎉 **Estoque máximo de 20 rotas completo!**\n'}` +
+          `\n📊 **Progresso da Meta de 20 Rotas:**\n${renderProgressBar(totalRoutesReady, 20, 14)}\n\n`
+        : `\n📊 **Progresso Geral da Carga:**\n${renderProgressBar(completedItemsCount, totalItemsCount, 14)}\n` +
+          `**${completedItemsCount} de ${totalItemsCount} itens totalmente carregados**\n\n`
+      ) +
+      `📦 **Estoque & Materiais Exigidos:**\n${itemsText || 'Nenhum item exigido.'}\n\n` +
+      `📜 **Último Registro:**\n${logsText}`
     )
-    .setFooter({ text: 'Selecione abaixo o item para carregar ou use os botões de ação • Pantaneiros' })
+    .setFooter({ text: isAnimalRoute ? 'Debite a rota ou atualize o estoque usando os botões abaixo • West Fox' : 'Selecione abaixo o item para carregar ou use os botões de ação • Pantaneiros' })
     .setTimestamp();
 
   // ==========================================
@@ -275,37 +327,48 @@ function buildRoutePanelPayload(routes, selectedRouteId = null) {
   const row2 = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId('panel_select_load_item')
-      .setPlaceholder('📦 Escolha o item que você acabou de colher/carregar...')
+      .setPlaceholder('📦 Escolha o item para atualizar/carregar estoque...')
       .addOptions(itemOptions)
   );
 
   // Linha 3: Botões de Ação Principais
   const actionButtons = [];
 
-  // Iniciar viagem
-  if (route.status === 'template' || !route.status) {
+  if (isAnimalRoute) {
+    // Botão de Despachar 1 Rota com débito de estoque
     actionButtons.push(
       new ButtonBuilder()
-        .setCustomId(`btn_start_route:${route.id}`)
-        .setLabel('🚀 Iniciar Viagem')
+        .setCustomId(`btn_dispatch_animal_route:${route.id}`)
+        .setLabel(`🚀 Despachar 1 Rota ($${route.rewardAmount})`)
         .setStyle(ButtonStyle.Success)
+        .setDisabled(totalRoutesReady < 1)
+    );
+  } else {
+    // Iniciar viagem para rotas normais
+    if (route.status === 'template' || !route.status) {
+      actionButtons.push(
+        new ButtonBuilder()
+          .setCustomId(`btn_start_route:${route.id}`)
+          .setLabel('🚀 Iniciar Viagem')
+          .setStyle(ButtonStyle.Success)
+      );
+    }
+
+    // Entregar & Creditar Recompensa
+    actionButtons.push(
+      new ButtonBuilder()
+        .setCustomId(`btn_complete_route:${route.id}`)
+        .setLabel(isAllItemsCompleted ? `🏆 Entregar Missão ($${route.rewardAmount})` : `⚡ Entregar Rota ($${route.rewardAmount})`)
+        .setStyle(isAllItemsCompleted ? ButtonStyle.Success : ButtonStyle.Primary)
+        .setDisabled(route.status === 'completed')
     );
   }
-
-  // Entregar & Creditar Recompensa
-  actionButtons.push(
-    new ButtonBuilder()
-      .setCustomId(`btn_complete_route:${route.id}`)
-      .setLabel(isAllItemsCompleted ? `🏆 Entregar Missão ($${route.rewardAmount})` : `⚡ Entregar Rota ($${route.rewardAmount})`)
-      .setStyle(isAllItemsCompleted ? ButtonStyle.Success : ButtonStyle.Primary)
-      .setDisabled(route.status === 'completed')
-  );
 
   // Reiniciar / Nova Viagem
   actionButtons.push(
     new ButtonBuilder()
       .setCustomId(`btn_reset_route:${route.id}`)
-      .setLabel('🔄 Nova Viagem')
+      .setLabel('🔄 Recarregar / Nova')
       .setStyle(ButtonStyle.Secondary)
   );
 
@@ -665,6 +728,109 @@ client.on('interactionCreate', async (interaction) => {
         await saveRoutesToDb(updatedRoutes);
         const payload = buildRoutePanelPayload(updatedRoutes, routeId);
         await interaction.update(payload);
+        return;
+      }
+
+      // Despachar 1 Rota de Animais (Debita estoque de 1 kit e credita $4.600)
+      if (customId.startsWith('btn_dispatch_animal_route:')) {
+        const [, routeId] = customId.split(':');
+        await loadRoutesFromDb();
+
+        const route = cachedRoutes.find((r) => r.id === routeId);
+        if (!route) {
+          await interaction.reply({ content: '❌ Rota não encontrada.', ephemeral: true });
+          return;
+        }
+
+        const items = route.items || [];
+        const routesReady = items.length === 0 ? 0 : Math.min(
+          ...items.map((it) => {
+            const perRoute = Number(it.perRoute || (it.targetAmount >= 2000 ? 100 : it.targetAmount >= 400 ? 20 : 20));
+            return Math.floor(Number(it.currentAmount || 0) / perRoute);
+          })
+        );
+
+        if (routesReady < 1) {
+          await interaction.reply({
+            content: '❌ **Estoque insuficiente para despachar 1 Rota de Animais!** Verifique os itens pendentes no painel.',
+            ephemeral: true,
+          });
+          return;
+        }
+
+        const reward = Number(route.rewardAmount) || 4600;
+
+        const updatedItems = items.map((it) => {
+          const perRoute = Number(it.perRoute || (it.targetAmount >= 2000 ? 100 : it.targetAmount >= 400 ? 20 : 20));
+          const newCurrent = Math.max(0, Number(it.currentAmount || 0) - perRoute);
+          return {
+            ...it,
+            currentAmount: newCurrent,
+            completed: newCurrent >= it.targetAmount,
+            updatedBy: userName,
+            updatedAt: new Date().toISOString(),
+          };
+        });
+
+        const newLog = {
+          id: `log-${Date.now()}`,
+          userName,
+          itemName: `1x ${route.title}`,
+          amount: reward,
+          timestamp: new Date().toISOString(),
+          action: 'dispatch',
+        };
+
+        const updatedRoute = {
+          ...route,
+          items: updatedItems,
+          logs: [newLog, ...(route.logs || [])].slice(0, 15),
+        };
+
+        const updatedRoutes = cachedRoutes.map((r) => (r.id === routeId ? updatedRoute : r));
+        await saveRoutesToDb(updatedRoutes);
+
+        // Insere transação no caixa da empresa no Supabase
+        try {
+          await supabase.from('transactions').insert({
+            id: `tx-animal-${Date.now()}`,
+            type: 'income',
+            amount: reward,
+            category: 'Despacho de Rota',
+            description: encodeCompanyTag(
+              `1x Rota de Animais despachada por ${userName} (Estoque debitado)`,
+              route.companyId || 'comp-ferrovia'
+            ),
+            member_name: userName,
+            date: new Date().toISOString(),
+          });
+        } catch (err) {
+          console.error('Erro ao creditar receita da rota de animais no Supabase:', err);
+        }
+
+        const payload = buildRoutePanelPayload(updatedRoutes, routeId);
+        await interaction.update(payload);
+
+        // Notifica o canal com embed comemorativo
+        const newRoutesReady = routesReady - 1;
+        await interaction.channel.send({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x10b981)
+              .setTitle(`🚀 1 ROTA DE ANIMAIS DESPACHADA COM SUCESSO!`)
+              .setDescription(
+                `**${userName}** realizou o despacho da viagem ferroviária!\n\n` +
+                `📦 **Materiais debitados do estoque:**\n` +
+                `• -20x Manteiga, Requeijão, Coalhada, Queijão, Queijo de Cabra\n` +
+                `• -100x Leite de Vaca, Ovos, Leite de Cabra, Chá\n\n` +
+                `💰 **Crédito no Caixa:** \`+$${reward.toLocaleString('pt-BR')} DOLS\` adicionados ao caixa da Ferrovia West Fox!\n` +
+                `🚂 **Rotas Prontas Restantes:** \`${newRoutesReady} rota(s) pronta(s)\``
+              )
+              .setFooter({ text: 'Ferrovia West Fox • Gestão de Rotas & Estoque' })
+              .setTimestamp()
+          ]
+        }).catch(() => {});
+
         return;
       }
 

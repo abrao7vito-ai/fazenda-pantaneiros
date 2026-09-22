@@ -508,3 +508,56 @@ export async function sendRouteCompletedDiscordLog(webhookUrl, {
     embeds: [embed],
   }, { companyId: companyId || route.companyId, deletePrevious });
 }
+
+/**
+ * Send Animal Route Dispatched Notification
+ */
+export async function sendRouteDispatchedDiscordLog(webhookUrl, {
+  route,
+  batchCount = 1,
+  rewardEarned,
+  dispatchedBy,
+  companyName,
+  companyId,
+  deletePrevious = true,
+}) {
+  const routesRemaining = Math.min(
+    ...(route.items || []).map((it) => {
+      const perRoute = Number(it.perRoute || (it.targetAmount >= 2000 ? 100 : 20));
+      return Math.floor(Number(it.currentAmount || 0) / perRoute);
+    })
+  );
+
+  const itemsList = (route.items || []).map((it) => {
+    const perRoute = Number(it.perRoute || (it.targetAmount >= 2000 ? 100 : 20));
+    const curr = Number(it.currentAmount || 0);
+    const itemRoutes = Math.floor(curr / perRoute);
+    const icon = it.icon || '📦';
+    return `${icon} **${it.name}**: \`${curr}/${it.targetAmount}\` (Cobre **${itemRoutes} rotas**)`;
+  }).join('\n');
+
+  const embed = {
+    title: `🚀 VIAGEM DESPACHADA: ${route.title.toUpperCase()}`,
+    description: `**${dispatchedBy}** despachou **${batchCount} Rota(s) de Animais**!\n` +
+      `📦 O kit de materiais foi debitado do estoque da empresa.\n\n` +
+      `💵 **Crédito no Caixa:** \`+${formatDols(rewardEarned)}\`\n` +
+      `🚂 **Rotas Prontas no Estoque:** **${routesRemaining} rota(s) pronta(s)**\n\n` +
+      `📊 **Situação Atual do Estoque:**\n${itemsList}`,
+    color: 0x10b981, // emerald-500
+    fields: [
+      { name: '💰 Recompensa', value: formatDols(rewardEarned), inline: true },
+      { name: '📦 Despachado Por', value: dispatchedBy, inline: true },
+      { name: '🎯 Rotas Restantes', value: `${routesRemaining} prontas`, inline: true },
+    ],
+    footer: {
+      text: `${companyName || 'Ferrovia West Fox'} • Gestão de Rotas & Estoque`,
+    },
+    timestamp: new Date().toISOString(),
+  };
+
+  return sendDiscordPayload(webhookUrl, {
+    content: `🚀 **${batchCount}x ROTA DE ANIMAIS DESPACHADA: +${formatDols(rewardEarned)} CREDITADO NO CAIXA!**`,
+    embeds: [embed],
+  }, { companyId: companyId || route.companyId, deletePrevious });
+}
+

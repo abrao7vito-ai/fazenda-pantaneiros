@@ -21,6 +21,7 @@ import {
   sendRouteStartedDiscordLog,
   sendRouteProgressDiscordLog,
   sendRouteCompletedDiscordLog,
+  sendRouteDispatchedDiscordLog,
 } from '../utils/discordWebhook';
 import {
   supabase,
@@ -1659,6 +1660,105 @@ export function FarmProvider({ children }) {
     return routeObj;
   };
 
+  const dispatchRouteBatch = (routeId, batchCount = 1) => {
+    const route = routes.find((r) => r.id === routeId);
+    if (!route) return { success: false, message: 'Rota não encontrada.' };
+
+    const items = route.items || [];
+    const count = Math.max(1, parseInt(batchCount, 10) || 1);
+
+    // Calcula quantas rotas completas o estoque atual permite
+    const maxPossible = items.length === 0 ? 0 : Math.min(
+      ...items.map((it) => {
+        const perRoute = Number(it.perRoute || (it.targetAmount >= 2000 ? 100 : it.targetAmount >= 400 ? 20 : 20));
+        return Math.floor(Number(it.currentAmount || 0) / perRoute);
+      })
+    );
+
+    if (maxPossible < count) {
+      return {
+        success: false,
+        message: `Estoque insuficiente para despachar ${count} viagem(ns). Disponível agora: ${maxPossible} viagem(ns).`,
+        routesAvailable: maxPossible,
+      };
+    }
+
+    const userName = currentUser?.name || 'Membro';
+    const rewardEarned = (Number(route.rewardAmount) || 4600) * count;
+
+    // Debita o estoque exato de 1 rota multiplicado pelo número de viagens
+    const updatedItems = items.map((it) => {
+      const perRoute = Number(it.perRoute || (it.targetAmount >= 2000 ? 100 : it.targetAmount >= 400 ? 20 : 20));
+      const needed = perRoute * count;
+      const newStock = Math.max(0, Number(it.currentAmount || 0) - needed);
+      return {
+        ...it,
+        currentAmount: newStock,
+        completed: newStock >= it.targetAmount,
+        updatedAt: new Date().toISOString(),
+        updatedBy: userName,
+      };
+    });
+
+    const newLog = {
+      id: `log-${Date.now()}`,
+      userName,
+      itemName: `${count}x ${route.title}`,
+      amount: rewardEarned,
+      timestamp: new Date().toISOString(),
+      action: 'dispatch',
+    };
+
+    const targetRoute = {
+      ...route,
+      items: updatedItems,
+      logs: [newLog, ...(route.logs || [])].slice(0, 15),
+    };
+
+    const updatedRoutes = routes.map((r) => (r.id === routeId ? targetRoute : r));
+    setRoutes(updatedRoutes);
+
+    if (supabase) {
+      supabase.from('farm_settings').upsert({
+        key: 'routes',
+        value: updatedRoutes,
+        updated_at: new Date().toISOString(),
+      }).then();
+    }
+
+    // Credita o valor ganho na tesouraria / caixa da empresa
+    addTransaction({
+      type: 'income',
+      amount: rewardEarned,
+      category: 'Despacho de Rota',
+      description: `${count}x Viagem "${route.title}" despachada por ${userName} (Estoque debitado)`,
+      companyId: route.companyId || currentCompanyId,
+    });
+
+    // Envia aviso com estoque restante para o Discord Webhook
+    const dispRouteCompId = route.companyId || currentCompanyId;
+    const dispRouteCompany = companies.find((c) => c.id === dispRouteCompId) || currentCompany;
+    const dispRouteDiscord = getCompanyDiscordSettings(dispRouteCompId);
+    if (dispRouteDiscord?.enabled && dispRouteDiscord?.webhookUrl) {
+      sendRouteDispatchedDiscordLog(dispRouteDiscord.webhookUrl, {
+        route: targetRoute,
+        batchCount: count,
+        rewardEarned,
+        dispatchedBy: userName,
+        companyName: dispRouteCompany?.name,
+        companyId: dispRouteCompId,
+        deletePrevious: dispRouteDiscord.autoDeletePrevious ?? true,
+      }).catch((e) => console.error('Erro ao enviar log de despacho para Discord:', e));
+    }
+
+    return { 
+      success: true, 
+      rewardEarned, 
+      remainingRoutes: maxPossible - count 
+    };
+  };
+
+
   const resetToDefaultData = () => {
     setMembers(INITIAL_MEMBERS);
     setTransactions(INITIAL_TRANSACTIONS);
@@ -1754,6 +1854,7 @@ export function FarmProvider({ children }) {
         completeRoute,
         resetRoute,
         addCustomRoute,
+        dispatchRouteBatch,
         // Discord Webhook Integration
         discordSettings: getCompanyDiscordSettings(currentCompanyId),
         allDiscordSettings: discordSettings,
