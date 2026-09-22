@@ -1180,13 +1180,15 @@ export function FarmProvider({ children }) {
     const memberToDelete = members.find((m) => m.id === id);
     if (!memberToDelete) return false;
     
-    // Safety check: Cannot delete Master or primary owner account
-    if (memberToDelete.role === 'master') {
+    // Safety check: Cannot delete Master account
+    if (memberToDelete.role === 'master' || memberToDelete.id === 'mem-master') {
       alert('Não é possível excluir a conta Administrador Master da Holding.');
       return false;
     }
-    if (memberToDelete.role === 'owner' && members.filter((m) => m.role === 'owner').length <= 1) {
-      alert('Não é possível excluir a conta principal do Dono da Fazenda.');
+
+    // Only Master can delete Owner accounts
+    if (memberToDelete.role === 'owner' && currentRole !== 'master') {
+      alert('Apenas o Administrador Master pode excluir contas de Donos.');
       return false;
     }
 

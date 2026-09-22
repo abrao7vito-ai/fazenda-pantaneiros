@@ -350,8 +350,8 @@ export function MemberManager() {
                       <Key className="w-4 h-4" />
                     </button>
 
-                    {/* Delete Account button (canManage, not primary owner or master) */}
-                    {!isOwner && !isMemberMaster && (
+                    {/* Delete Account button (Master can delete ANY owner, manager or member. Owners cannot delete other owners) */}
+                    {!isMemberMaster && (isMaster || !isOwner) && (
                       <button
                         onClick={() => setMemberToDelete(member)}
                         title={`Excluir conta de ${member.name}`}

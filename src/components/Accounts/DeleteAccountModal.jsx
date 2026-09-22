@@ -26,7 +26,7 @@ export function DeleteAccountModal({ isOpen, onClose, memberToDelete }) {
               <UserX className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-stone-900">Excluir Conta da Fazenda</h3>
+              <h3 className="text-base font-bold text-stone-900">Excluir Conta • {memberToDelete?.name}</h3>
               <p className="text-xs text-rose-700/80">Esta ação não poderá ser desfeita</p>
             </div>
           </div>
