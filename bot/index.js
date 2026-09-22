@@ -363,6 +363,16 @@ client.once('ready', async () => {
       .setName('rotas')
       .setDescription('Visualiza o painel de rotas e missões ativas.')
       .setDefaultMemberPermissions(PermissionFlagsBits.SendMessages),
+    new SlashCommandBuilder()
+      .setName('limpar')
+      .setDescription('Apaga mensagens antigas de logs para manter o canal 100% limpo.')
+      .addIntegerOption((opt) =>
+        opt
+          .setName('quantidade')
+          .setDescription('Quantidade de mensagens a apagar (padrão: 50)')
+          .setRequired(false)
+      )
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
   ];
 
   const rest = new REST({ version: '10' }).setToken(TOKEN);
@@ -436,6 +446,21 @@ client.on('messageCreate', async (message) => {
       }
     }
   }
+
+  // Comando !limpar para apagar mensagens acumuladas antigas do canal
+  if (content === '!limpar' || content.startsWith('!limpar ')) {
+    const parts = content.split(' ');
+    const count = Math.min(100, Math.max(1, parseInt(parts[1]) || 50));
+    try {
+      const messages = await message.channel.messages.fetch({ limit: count });
+      await message.channel.bulkDelete(messages, true);
+      const confirmMsg = await message.channel.send(`🧹 **Canal limpo com sucesso!** Foram apagadas ${messages.size} mensagens.`);
+      setTimeout(() => confirmMsg.delete().catch(() => {}), 4000);
+    } catch (err) {
+      console.error('Erro ao limpar canal:', err);
+      message.reply('❌ Erro ao limpar canal. Verifique se o Bot tem permissão de "Gerenciar Mensagens".').catch(() => {});
+    }
+  }
 });
 
 // ==========================================
@@ -445,7 +470,7 @@ client.on('messageCreate', async (message) => {
 client.on('interactionCreate', async (interaction) => {
   try {
     // ----------------------------------------------------
-    // 1. Slash Commands (/painel ou /rotas)
+    // 1. Slash Commands (/painel, /rotas, /limpar)
     // ----------------------------------------------------
     if (interaction.isChatInputCommand()) {
       if (interaction.commandName === 'painel' || interaction.commandName === 'rotas') {
@@ -464,6 +489,21 @@ client.on('interactionCreate', async (interaction) => {
 
         // Se for o comando /painel, salva como mensagem fixa oficial
         await savePanelInfo(interaction.channelId, replyMsg.id, activeSelectedRouteId);
+        return;
+      }
+
+      if (interaction.commandName === 'limpar') {
+        const count = interaction.options.getInteger('quantidade') || 50;
+        await interaction.deferReply({ ephemeral: true });
+        try {
+          const messages = await interaction.channel.messages.fetch({ limit: Math.min(count, 100) });
+          await interaction.channel.bulkDelete(messages, true);
+          await interaction.editReply(`🧹 **Canal limpo com sucesso!** ${messages.size} mensagens antigas foram removidas. A partir de agora, cada nova log enviada apagará automaticamente a anterior!`);
+        } catch (err) {
+          console.error('Erro ao limpar canal via slash:', err);
+          await interaction.editReply(`❌ Erro ao limpar canal: ${err.message}. Verifique se o Bot tem permissão de "Gerenciar Mensagens".`);
+        }
+        return;
       }
       return;
     }
