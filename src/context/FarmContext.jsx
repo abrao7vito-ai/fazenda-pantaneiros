@@ -166,6 +166,7 @@ export function FarmProvider({ children }) {
   // --- Authentication & 15-Minute Inactivity States ---
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     // Requires login explicitly - check active session
+    if (typeof sessionStorage === 'undefined') return false;
     return sessionStorage.getItem('pantaneiros_auth_v1') === 'true';
   });
 
@@ -447,8 +448,10 @@ export function FarmProvider({ children }) {
     setIsAuthenticated(true);
     setLogoutReason(null);
     lastActivityRef.current = Date.now();
-    sessionStorage.setItem('pantaneiros_auth_v1', 'true');
-    sessionStorage.setItem('pantaneiros_user_id', member.id);
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('pantaneiros_auth_v1', 'true');
+      sessionStorage.setItem('pantaneiros_user_id', member.id);
+    }
 
     // Strict SaaS Multi-Tenant Isolation:
     // When a non-master user logs in, instantly lock to their assigned company
@@ -464,7 +467,9 @@ export function FarmProvider({ children }) {
   const logout = (reason = 'user') => {
     setIsAuthenticated(false);
     setLogoutReason(reason);
-    sessionStorage.removeItem('pantaneiros_auth_v1');
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('pantaneiros_auth_v1');
+    }
   };
 
   // 15-Minute Inactivity Watcher

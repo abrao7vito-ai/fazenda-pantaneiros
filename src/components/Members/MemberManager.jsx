@@ -220,7 +220,7 @@ export function MemberManager() {
           const isMemberMaster = member.role === 'master';
           const isOwner = member.role === 'owner';
           const isManager = member.role === 'manager';
-          const stats = memberPayouts.find((p) => p.member.id === member.id);
+          const stats = (memberPayouts || []).find((p) => p?.member?.id === member.id);
 
           return (
             <div

@@ -39,7 +39,7 @@ export function ProfitSplitView() {
   const [copiedPayroll, setCopiedPayroll] = useState(false);
   const [cycleTitle, setCycleTitle] = useState('');
 
-  const isOwner = currentRole === 'owner';
+  const isOwner = currentRole === 'owner' || currentRole === 'master';
   const totalPercentage = Number(farmPercent) + Number(managersPercent) + Number(membersPercent);
   const isValidSplit = totalPercentage === 100;
 
@@ -415,15 +415,16 @@ export function ProfitSplitView() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
-                  {memberPayouts.map((p) => {
-                    const isMgr = p.member.role === 'manager';
-                    const isO = p.member.role === 'owner';
+                  {(memberPayouts || []).map((p, idx) => {
+                    const isMgr = p?.member?.role === 'manager';
+                    const isO = p?.member?.role === 'owner';
+                    const memberKey = p?.member?.id || `payout-${idx}`;
 
                     return (
-                      <tr key={p.member.id} className="hover:bg-stone-50/60 transition-colors">
+                      <tr key={memberKey} className="hover:bg-stone-50/60 transition-colors">
                         <td className="py-3 px-3 font-semibold text-stone-900 flex items-center gap-2">
-                          <span className="text-base">{p.member.avatar}</span>
-                          <span>{p.member.name}</span>
+                          <span className="text-base">{p?.member?.avatar || '👤'}</span>
+                          <span>{p?.member?.name || 'Membro'}</span>
                         </td>
                         <td className="py-3 px-3 whitespace-nowrap">
                           <span
@@ -435,7 +436,7 @@ export function ProfitSplitView() {
                                 : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                             }`}
                           >
-                            {p.member.roleLabel}
+                            {p?.member?.roleLabel || (isO ? 'Dono' : isMgr ? 'Gerente' : 'Membro')}
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right font-mono text-stone-700">

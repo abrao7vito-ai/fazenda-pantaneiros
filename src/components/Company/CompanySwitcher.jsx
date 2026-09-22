@@ -3,7 +3,7 @@ import { useFarm } from '../../context/FarmContext';
 import { formatDols } from '../../utils/formatters';
 import { ChevronDown, Check, Plus, Building2, Layers } from 'lucide-react';
 
-export function CompanySwitcher({ onOpenCreateCompany }) {
+export function CompanySwitcher({ onOpenCreateCompany, initialOpen = false }) {
   const { 
     companies, 
     currentCompanyId, 
@@ -14,10 +14,11 @@ export function CompanySwitcher({ onOpenCreateCompany }) {
     currentRole
   } = useFarm();
 
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(initialOpen);
   const dropdownRef = useRef(null);
 
   const isMaster = currentRole === 'master';
+  const isOwner = currentRole === 'owner';
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -107,16 +108,16 @@ export function CompanySwitcher({ onOpenCreateCompany }) {
 
           {/* Companies List */}
           <div className="max-h-60 overflow-y-auto py-1 space-y-1">
-            {companies.map((comp) => {
-              const isSelected = comp.id === currentCompanyId;
-              const balance = companyBalances[comp.id] != null ? companyBalances[comp.id] : 0;
+            {(companies || []).filter(Boolean).map((comp) => {
+              const isSelected = comp?.id === currentCompanyId;
+              const balance = (companyBalances && comp?.id && companyBalances[comp.id] != null) ? companyBalances[comp.id] : 0;
 
               return (
                 <button
-                  key={comp.id}
+                  key={comp?.id}
                   type="button"
                   onClick={() => {
-                    selectCompany(comp.id);
+                    if (comp?.id) selectCompany(comp.id);
                     setIsOpen(false);
                   }}
                   className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all ${
@@ -126,10 +127,10 @@ export function CompanySwitcher({ onOpenCreateCompany }) {
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-base shrink-0">{comp.icon}</span>
+                    <span className="text-base shrink-0">{comp?.icon || '🏢'}</span>
                     <div className="min-w-0">
-                      <div className="text-xs truncate font-bold text-stone-900">{comp.name}</div>
-                      <div className="text-[10px] text-stone-400 truncate">{comp.segment}</div>
+                      <div className="text-xs truncate font-bold text-stone-900">{comp?.name}</div>
+                      <div className="text-[10px] text-stone-400 truncate">{comp?.segment}</div>
                     </div>
                   </div>
 
@@ -156,8 +157,8 @@ export function CompanySwitcher({ onOpenCreateCompany }) {
             </span>
           </div>
 
-          {/* New Company Action Button (Owner only) */}
-          {isOwner && onOpenCreateCompany && (
+          {/* New Company Action Button (Master only) */}
+          {(isMaster || isOwner) && onOpenCreateCompany && (
             <div className="pt-1.5 mt-1 border-t border-stone-100">
               <button
                 type="button"

@@ -115,15 +115,15 @@ export function MasterCompanyDashboard({ onOpenCreateCompany }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {companies.map((comp) => {
-            const isSelected = comp.id === currentCompanyId;
-            const balance = (companyBalances && companyBalances[comp.id] != null) ? companyBalances[comp.id] : 0;
-            const compGoals = (allGoals || []).filter((g) => g && (g.companyId || 'comp-fazenda') === comp.id);
+          {(companies || []).filter(Boolean).map((comp) => {
+            const isSelected = comp?.id === currentCompanyId;
+            const balance = (companyBalances && comp?.id && companyBalances[comp.id] != null) ? companyBalances[comp.id] : 0;
+            const compGoals = (allGoals || []).filter((g) => g && (g.companyId || 'comp-fazenda') === comp?.id);
             const activeCompGoals = compGoals.filter((g) => g.status === 'in_progress').length;
 
             return (
               <div
-                key={comp.id}
+                key={comp?.id}
                 className={`bg-white border rounded-3xl p-5 shadow-card transition-all flex flex-col justify-between ${
                   isSelected
                     ? 'border-amber-400 ring-2 ring-amber-400/20 shadow-md'
