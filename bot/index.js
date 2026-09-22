@@ -43,6 +43,21 @@ if (!TOKEN || TOKEN === 'COLE_SEU_TOKEN_AQUI') {
 // Inicializa Supabase
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Mini servidor HTTP para manter o bot ativo na nuvem (Render, Railway, UptimeRobot, etc.)
+import('http').then(({ default: http }) => {
+  const PORT = process.env.PORT || 3001;
+  http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      status: 'online', 
+      bot: client.user?.tag || 'connecting',
+      timestamp: new Date().toISOString() 
+    }));
+  }).listen(PORT, () => {
+    console.log(`🌐 Servidor HTTP do Bot ativo na porta ${PORT} (Pronto para Uptime 24/7)`);
+  });
+});
+
 // Inicializa Cliente Discord com todas as intents necessárias
 const client = new Client({
   intents: [
