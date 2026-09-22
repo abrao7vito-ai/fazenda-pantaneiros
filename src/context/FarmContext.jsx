@@ -962,6 +962,8 @@ export function FarmProvider({ children }) {
         description: newTx.description,
         date: txDate,
         companyName: txCompany?.name,
+        companyId: activeCompId,
+        deletePrevious: txDiscord.autoDeletePrevious ?? true,
       }).catch((err) => console.error('Erro ao enviar log para o Discord:', err));
     }
 
@@ -1028,6 +1030,8 @@ export function FarmProvider({ children }) {
         notes,
         goalTitle: newDelivery.goalTitle,
         companyName: delivCompany?.name,
+        companyId: activeCompId,
+        deletePrevious: delivDiscord.autoDeletePrevious ?? true,
       }).catch((err) => console.error('Erro ao enviar log para o Discord:', err));
     }
 
@@ -1115,6 +1119,8 @@ export function FarmProvider({ children }) {
         goalTitle: delivery.goalTitle,
         unitLabel: delivery.itemType,
         companyName: confCompany?.name,
+        companyId: confCompId,
+        deletePrevious: confDiscord.autoDeletePrevious ?? true,
       }).catch((err) => console.error('Erro ao enviar confirmação para o Discord:', err));
     }
 
@@ -1334,6 +1340,8 @@ export function FarmProvider({ children }) {
         payouts: cycleRecord.payouts,
         closedBy: currentUser?.name || 'Liderança',
         companyName: cycleCompany?.name,
+        companyId: cycleCompId,
+        deletePrevious: cycleDiscord.autoDeletePrevious ?? true,
       }).catch((err) => console.error('Erro ao enviar log de repasses para o Discord:', err));
     }
 
@@ -1429,6 +1437,8 @@ export function FarmProvider({ children }) {
         route,
         startedBy,
         companyName: startRouteCompany?.name,
+        companyId: startRouteCompId,
+        deletePrevious: startRouteDiscord.autoDeletePrevious ?? true,
       }).catch((e) => console.error('Erro ao enviar log de rota para Discord:', e));
     }
   };
@@ -1506,6 +1516,8 @@ export function FarmProvider({ children }) {
           item: updatedItem,
           updatedBy: currentUser?.name || 'Membro',
           companyName: progRouteCompany?.name,
+          companyId: progRouteCompId,
+          deletePrevious: progRouteDiscord.autoDeletePrevious ?? true,
         }).catch((e) => console.error('Erro ao enviar progresso da rota para Discord:', e));
       }
     }
@@ -1563,6 +1575,8 @@ export function FarmProvider({ children }) {
         completedBy,
         companyName: compRouteCompany?.name,
         creditedToBox: creditToBox && route.rewardAmount > 0,
+        companyId: compRouteCompId,
+        deletePrevious: compRouteDiscord.autoDeletePrevious ?? true,
       }).catch((e) => console.error('Erro ao enviar conclusão da rota para Discord:', e));
     }
   };
@@ -1637,6 +1651,8 @@ export function FarmProvider({ children }) {
         route: routeObj,
         startedBy: currentUser?.name || 'Membro',
         companyName: addRouteCompany?.name,
+        companyId: addRouteCompId,
+        deletePrevious: addRouteDiscord.autoDeletePrevious ?? true,
       }).catch((e) => console.error(e));
     }
 

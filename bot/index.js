@@ -216,8 +216,8 @@ function buildRoutePanelPayload(routes, selectedRouteId = null) {
     return `${checkEmoji} **${it.name}**: \`${current}/${target} ${unit}\` (${pct}%) ${isDone ? '*(Completo)*' : ''}`;
   }).join('\n');
 
-  // Histórico de Carregamento
-  const logs = (route.logs || []).slice(0, 4);
+  // Histórico de Carregamento (Exibe apenas a última log recente)
+  const logs = (route.logs || []).slice(0, 1);
   const logsText = logs.length > 0
     ? logs.map((l) => `• **${l.userName}** carregou \`+${l.amount}\` de *${l.itemName}* (<t:${Math.floor(new Date(l.timestamp).getTime() / 1000)}:R>)`).join('\n')
     : '*Nenhum carregamento recente registrado ainda.*';
@@ -234,7 +234,7 @@ function buildRoutePanelPayload(routes, selectedRouteId = null) {
       `\n📊 **Progresso Geral da Carga:**\n${renderProgressBar(completedItemsCount, totalItemsCount, 14)}\n` +
       `**${completedItemsCount} de ${totalItemsCount} itens totalmente carregados**\n\n` +
       `📦 **Checklist de Itens Exigidos:**\n${itemsText || 'Nenhum item exigido.'}\n\n` +
-      `📜 **Últimos Carregamentos Registrados:**\n${logsText}`
+      `📜 **Último Carregamento Registrado:**\n${logsText}`
     )
     .setFooter({ text: 'Selecione abaixo o item para carregar ou use os botões de ação • Pantaneiros' })
     .setTimestamp();
@@ -407,6 +407,15 @@ client.on('messageCreate', async (message) => {
   if (content === '!painel' || content === '!rotas' || content === '!checklist') {
     try {
       await loadRoutesFromDb();
+
+      // Apaga o painel anterior no canal se existir para que apenas o novo permaneça
+      if (panelInfo && panelInfo.channelId === message.channel.id && panelInfo.messageId) {
+        try {
+          const oldMsg = await message.channel.messages.fetch(panelInfo.messageId);
+          if (oldMsg) await oldMsg.delete();
+        } catch (_) {}
+      }
+
       const payload = buildRoutePanelPayload(cachedRoutes, activeSelectedRouteId);
       const sentMsg = await message.channel.send(payload);
 
@@ -440,6 +449,14 @@ client.on('interactionCreate', async (interaction) => {
     // ----------------------------------------------------
     if (interaction.isChatInputCommand()) {
       if (interaction.commandName === 'painel' || interaction.commandName === 'rotas') {
+        // Apaga o painel anterior no canal se existir para não acumular
+        if (panelInfo && panelInfo.channelId === interaction.channelId && panelInfo.messageId) {
+          try {
+            const oldMsg = await interaction.channel?.messages?.fetch(panelInfo.messageId);
+            if (oldMsg) await oldMsg.delete();
+          } catch (_) {}
+        }
+
         await interaction.deferReply();
         await loadRoutesFromDb();
         const payload = buildRoutePanelPayload(cachedRoutes, activeSelectedRouteId);

@@ -465,12 +465,17 @@ export function RouteChecklistManager() {
                   {/* Histórico Recente de Carregamentos */}
                   {route.logs && route.logs.length > 0 && (
                     <div className="mt-4 p-3 rounded-2xl bg-stone-900/80 border border-stone-800/90 text-xs">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1.5 flex items-center gap-1.5">
-                        <Clock className="w-3 h-3 text-amber-400" />
-                        <span>Histórico de Carregamento (Discord & Web):</span>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1.5 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 text-amber-400" />
+                          <span>Último Carregamento Registrado:</span>
+                        </div>
+                        <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-bold">
+                          Mais Recente
+                        </span>
                       </div>
-                      <div className="space-y-1 max-h-24 overflow-y-auto font-mono text-[11px]">
-                        {route.logs.slice(0, 4).map((log) => (
+                      <div className="space-y-1 font-mono text-[11px]">
+                        {route.logs.slice(0, 1).map((log) => (
                           <div key={log.id} className="text-stone-300 flex items-center justify-between">
                             <span>
                               <strong className="text-amber-300">{log.userName}</strong> carregou <strong className="text-emerald-400">+{log.amount}</strong> de {log.itemName}

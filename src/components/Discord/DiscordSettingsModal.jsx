@@ -31,6 +31,7 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
   const [autoCashflow, setAutoCashflow] = useState(true);
   const [autoDeliveries, setAutoDeliveries] = useState(true);
   const [autoPayroll, setAutoPayroll] = useState(true);
+  const [autoDeletePrevious, setAutoDeletePrevious] = useState(true);
 
   const [testStatus, setTestStatus] = useState(null); // 'loading' | 'success' | 'error' | null
   const [testError, setTestError] = useState('');
@@ -52,6 +53,7 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
       setAutoCashflow(settings?.autoCashflow ?? true);
       setAutoDeliveries(settings?.autoDeliveries ?? true);
       setAutoPayroll(settings?.autoPayroll ?? true);
+      setAutoDeletePrevious(settings?.autoDeletePrevious ?? true);
       setTestStatus(null);
       setSaveStatus(null);
     }
@@ -98,6 +100,7 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
         autoCashflow,
         autoDeliveries,
         autoPayroll,
+        autoDeletePrevious,
       }, selectedCompanyId);
 
       setSaveStatus('success');
@@ -271,6 +274,27 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
               />
               <span>💰 Fechamento de Lucros e Repasses aos Integrantes</span>
             </label>
+
+            {/* Auto-limpeza: apagar a log anterior assim que a nova surgir */}
+            <div className="pt-2 border-t border-stone-100">
+              <label className="flex items-start gap-2.5 text-xs text-stone-700 cursor-pointer p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/20 hover:bg-amber-500/10 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={autoDeletePrevious}
+                  onChange={(e) => setAutoDeletePrevious(e.target.checked)}
+                  className="rounded accent-pantanal-700 w-4 h-4 mt-0.5 shrink-0"
+                />
+                <div className="flex flex-col">
+                  <span className="font-bold text-stone-900 flex items-center gap-1.5">
+                    <span>🗑️ Auto-Limpeza de Logs no Discord</span>
+                    <span className="text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded font-semibold">Recomendado</span>
+                  </span>
+                  <span className="text-[11px] text-stone-500 mt-0.5">
+                    Assim que a nova log surgir no canal, a anterior é apagada automaticamente para não acumular mensagens antigas.
+                  </span>
+                </div>
+              </label>
+            </div>
           </div>
 
           {/* Buttons */}

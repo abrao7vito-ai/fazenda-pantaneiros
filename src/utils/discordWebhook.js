@@ -1,23 +1,143 @@
 /**
  * Discord Webhook Integration for Fazenda Pantaneiros - West Fox
  * Sends automated embed logs directly to Discord channels via standard Discord Webhooks.
+ * Features automated deletion of previous logs so only the latest log remains in the channel!
  */
 
 import { formatDols, formatFullDateBR } from './formatters';
+import { supabase } from './supabaseClient';
 
 const BOT_NAME = 'Fazenda Pantaneiros • West Fox';
 const BOT_AVATAR_URL = 'https://i.imgur.com/vHqVwX2.png'; // Fallback or public avatar icon
 
+// Cache local em memória para os IDs das últimas mensagens enviadas por webhook/empresa
+const lastMessageMap = new Map();
+
+function getStorageKey(webhookUrl, companyId) {
+  if (companyId) return `company_${companyId}`;
+  try {
+    const cleanUrl = webhookUrl.split('?')[0].replace(/\/+$/, '');
+    return cleanUrl;
+  } catch (_) {
+    return webhookUrl;
+  }
+}
+
 /**
- * Send raw payload to Discord Webhook
+ * Busca o ID da última mensagem enviada por esse webhook
  */
-export async function sendDiscordPayload(webhookUrl, payload) {
+async function getLastMessageId(webhookUrl, companyId) {
+  const key = getStorageKey(webhookUrl, companyId);
+  const cleanUrl = webhookUrl.split('?')[0].replace(/\/+$/, '');
+
+  // 1. Memória RAM local
+  if (lastMessageMap.has(key)) {
+    return lastMessageMap.get(key);
+  }
+
+  // 2. LocalStorage do navegador
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const saved = localStorage.getItem(`discord_last_log_${key}`) || localStorage.getItem(`discord_last_log_${cleanUrl}`);
+      if (saved) {
+        lastMessageMap.set(key, saved);
+        return saved;
+      }
+    } catch (_) {}
+  }
+
+  // 3. Supabase Cloud Sync
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('farm_settings')
+        .select('value')
+        .eq('key', 'discord_last_logs')
+        .maybeSingle();
+
+      if (data?.value && typeof data.value === 'object') {
+        const msgId = data.value[key] || data.value[cleanUrl];
+        if (msgId) {
+          lastMessageMap.set(key, msgId);
+          return msgId;
+        }
+      }
+    } catch (_) {}
+  }
+
+  return null;
+}
+
+/**
+ * Salva o ID da nova mensagem para que ela possa ser apagada assim que a próxima surgir
+ */
+async function saveLastMessageId(webhookUrl, companyId, messageId) {
+  const key = getStorageKey(webhookUrl, companyId);
+  const cleanUrl = webhookUrl.split('?')[0].replace(/\/+$/, '');
+
+  lastMessageMap.set(key, messageId);
+
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(`discord_last_log_${key}`, messageId);
+      localStorage.setItem(`discord_last_log_${cleanUrl}`, messageId);
+    } catch (_) {}
+  }
+
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('farm_settings')
+        .select('value')
+        .eq('key', 'discord_last_logs')
+        .maybeSingle();
+
+      const existing = (data && data.value && typeof data.value === 'object') ? data.value : {};
+      const updated = {
+        ...existing,
+        [key]: messageId,
+        [cleanUrl]: messageId,
+      };
+
+      await supabase.from('farm_settings').upsert({
+        key: 'discord_last_logs',
+        value: updated,
+        updated_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn('Aviso ao sincronizar ID da última mensagem no Supabase:', e.message);
+    }
+  }
+}
+
+/**
+ * Send raw payload to Discord Webhook with auto-delete of previous message
+ */
+export async function sendDiscordPayload(webhookUrl, payload, options = {}) {
   if (!webhookUrl || !webhookUrl.trim().startsWith('https://discord.com/api/webhooks/')) {
     return { success: false, error: 'URL de Webhook inválida.' };
   }
 
+  const cleanBaseUrl = webhookUrl.trim().split('?')[0].replace(/\/+$/, '');
+  const { companyId, deletePrevious = true } = options;
+
+  // 1. Apaga a mensagem anterior para que ela suma assim que a nova surgir!
+  if (deletePrevious) {
+    try {
+      const prevMessageId = await getLastMessageId(cleanBaseUrl, companyId);
+      if (prevMessageId) {
+        const deleteUrl = `${cleanBaseUrl}/messages/${prevMessageId}`;
+        await fetch(deleteUrl, { method: 'DELETE' }).catch(() => {});
+      }
+    } catch (err) {
+      console.warn('Aviso ao apagar log anterior do Discord:', err);
+    }
+  }
+
+  // 2. Envia a nova mensagem com ?wait=true para registrar o ID gerado
   try {
-    const response = await fetch(webhookUrl.trim(), {
+    const postUrl = `${cleanBaseUrl}?wait=true`;
+    const response = await fetch(postUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -31,6 +151,13 @@ export async function sendDiscordPayload(webhookUrl, payload) {
     });
 
     if (response.ok || response.status === 204) {
+      try {
+        const msgData = await response.json();
+        if (msgData?.id) {
+          await saveLastMessageId(cleanBaseUrl, companyId, msgData.id);
+        }
+      } catch (_) {}
+
       return { success: true };
     } else {
       const errText = await response.text();
@@ -45,13 +172,18 @@ export async function sendDiscordPayload(webhookUrl, payload) {
 /**
  * Test Webhook with a test message
  */
-export async function testDiscordWebhook(webhookUrl, senderName = 'Líder', companyName = 'Fazenda Pantaneiros') {
+export async function testDiscordWebhook(
+  webhookUrl, 
+  senderName = 'Líder', 
+  companyName = 'Fazenda Pantaneiros',
+  options = {}
+) {
   const payload = {
     content: `🔔 **TESTE DE CONEXÃO • ${companyName.toUpperCase()}**`,
     embeds: [
       {
         title: `🌾 Integração Discord Ativada com Sucesso!`,
-        description: `O canal de logs exclusivo da empresa **${companyName}** foi conectado ao sistema pelo integrante **${senderName}**.\n\nA partir de agora, lançamentos de caixa, entregas de produção e missões desta empresa serão enviadas automaticamente para este canal!`,
+        description: `O canal de logs exclusivo da empresa **${companyName}** foi conectado ao sistema pelo integrante **${senderName}**.\n\nA partir de agora, lançamentos de caixa, entregas de produção e missões desta empresa serão enviadas automaticamente para este canal!\n*(Auto-limpeza ativa: ao surgir nova log, a última suma)*`,
         color: 0xc59b4c, // Cor Ouro Pantaneiros (#c59b4c)
         fields: [
           { name: 'Empresa', value: companyName, inline: true },
@@ -66,7 +198,7 @@ export async function testDiscordWebhook(webhookUrl, senderName = 'Líder', comp
     ],
   };
 
-  return sendDiscordPayload(webhookUrl, payload);
+  return sendDiscordPayload(webhookUrl, payload, options);
 }
 
 /**
@@ -81,12 +213,13 @@ export async function sendCashFlowDiscordLog(webhookUrl, {
   description = '',
   date = new Date(),
   companyName = 'Fazenda Pantaneiros',
+  companyId,
+  deletePrevious = true,
 }) {
   const isIncome = type === 'income';
   const formattedAmount = formatDols(amount);
   const formattedTotal = formatDols(totalBoxBalance);
 
-  // Exact text format adapted for multi-company
   let rawText = '';
   if (isIncome) {
     rawText += `> **ADICIONADO:** ${formattedAmount} NO CAIXA • ${companyName.toUpperCase()}\n`;
@@ -122,7 +255,7 @@ export async function sendCashFlowDiscordLog(webhookUrl, {
   return sendDiscordPayload(webhookUrl, {
     content: `💰 **LOG FINANCEIRO • ${companyName.toUpperCase()}**`,
     embeds: [embed],
-  });
+  }, { companyId, deletePrevious });
 }
 
 /**
@@ -136,6 +269,8 @@ export async function sendDeliverySubmittedDiscordLog(webhookUrl, {
   notes = '',
   goalTitle = '',
   companyName = 'Fazenda Pantaneiros',
+  companyId,
+  deletePrevious = true,
 }) {
   const embed = {
     title: `📦 ENTREGA DE PRODUÇÃO • ${companyName.toUpperCase()}`,
@@ -158,7 +293,7 @@ export async function sendDeliverySubmittedDiscordLog(webhookUrl, {
   return sendDiscordPayload(webhookUrl, {
     content: `📦 **NOVA REMESSA • ${companyName.toUpperCase()}**`,
     embeds: [embed],
-  });
+  }, { companyId, deletePrevious });
 }
 
 /**
@@ -172,6 +307,8 @@ export async function sendDeliveryConfirmedDiscordLog(webhookUrl, {
   confirmedTotal,
   targetTotal,
   companyName = 'Fazenda Pantaneiros',
+  companyId,
+  deletePrevious = true,
 }) {
   const percent = targetTotal > 0 ? Math.round((confirmedTotal / targetTotal) * 100) : 100;
 
@@ -199,7 +336,7 @@ export async function sendDeliveryConfirmedDiscordLog(webhookUrl, {
   return sendDiscordPayload(webhookUrl, {
     content: `✅ **ENTREGA VALIDADA • ${companyName.toUpperCase()}**`,
     embeds: [embed],
-  });
+  }, { companyId, deletePrevious });
 }
 
 /**
@@ -216,6 +353,8 @@ export async function sendPayrollDiscordLog(webhookUrl, {
   payouts,
   closedBy,
   companyName = 'Fazenda Pantaneiros',
+  companyId,
+  deletePrevious = true,
 }) {
   let payoutsText = '';
   payouts.slice(0, 15).forEach((p) => {
@@ -245,13 +384,19 @@ export async function sendPayrollDiscordLog(webhookUrl, {
   return sendDiscordPayload(webhookUrl, {
     content: `🌾 **FECHAMENTO OFICIAL DE LUCROS • ${companyName.toUpperCase()}**`,
     embeds: [embed],
-  });
+  }, { companyId, deletePrevious });
 }
 
 /**
  * Send Route Started Notification
  */
-export async function sendRouteStartedDiscordLog(webhookUrl, { route, startedBy, companyName }) {
+export async function sendRouteStartedDiscordLog(webhookUrl, { 
+  route, 
+  startedBy, 
+  companyName,
+  companyId,
+  deletePrevious = true 
+}) {
   const itemsText = (route.items || [])
     .map((it) => `• \`[0/${it.targetAmount}]\` **${it.name}**`)
     .join('\n');
@@ -266,7 +411,7 @@ export async function sendRouteStartedDiscordLog(webhookUrl, { route, startedBy,
       { name: '👤 Responsável', value: startedBy, inline: true },
     ],
     footer: {
-      text: 'Fazenda Pantaneiros • Checklist de Rotas & Missões',
+      text: `${companyName || 'Fazenda Pantaneiros'} • Checklist de Rotas & Missões`,
     },
     timestamp: new Date().toISOString(),
   };
@@ -274,13 +419,20 @@ export async function sendRouteStartedDiscordLog(webhookUrl, { route, startedBy,
   return sendDiscordPayload(webhookUrl, {
     content: `🚂 **NOVA ROTA INICIADA: ${route.title} • RECOMPENSA ${formatDols(route.rewardAmount)}**`,
     embeds: [embed],
-  });
+  }, { companyId: companyId || route.companyId, deletePrevious });
 }
 
 /**
  * Send Route Progress Update
  */
-export async function sendRouteProgressDiscordLog(webhookUrl, { route, item, updatedBy, companyName }) {
+export async function sendRouteProgressDiscordLog(webhookUrl, { 
+  route, 
+  item, 
+  updatedBy, 
+  companyName,
+  companyId,
+  deletePrevious = true 
+}) {
   const completedCount = (route.items || []).filter((i) => i.completed || (Number(i.currentAmount) >= Number(i.targetAmount))).length;
   const totalCount = route.items?.length || 1;
   const percent = Math.round((completedCount / totalCount) * 100);
@@ -308,7 +460,7 @@ export async function sendRouteProgressDiscordLog(webhookUrl, { route, item, upd
       { name: '📊 Conclusão', value: `${percent}%`, inline: true },
     ],
     footer: {
-      text: 'Fazenda Pantaneiros • Sistema de Rotas & Cargas',
+      text: `${companyName || 'Fazenda Pantaneiros'} • Sistema de Rotas & Cargas`,
     },
     timestamp: new Date().toISOString(),
   };
@@ -316,13 +468,20 @@ export async function sendRouteProgressDiscordLog(webhookUrl, { route, item, upd
   return sendDiscordPayload(webhookUrl, {
     content: `📦 **ATUALIZAÇÃO DE ROTA: ${route.title} (${percent}% Concluído)**`,
     embeds: [embed],
-  });
+  }, { companyId: companyId || route.companyId, deletePrevious });
 }
 
 /**
  * Send Route Completed Notification
  */
-export async function sendRouteCompletedDiscordLog(webhookUrl, { route, completedBy, companyName, creditedToBox }) {
+export async function sendRouteCompletedDiscordLog(webhookUrl, { 
+  route, 
+  completedBy, 
+  companyName, 
+  creditedToBox,
+  companyId,
+  deletePrevious = true 
+}) {
   const itemsList = (route.items || [])
     .map((it) => `✅ \`[${it.targetAmount}/${it.targetAmount}]\` **${it.name}** (100% Entregue)`)
     .join('\n');
@@ -339,7 +498,7 @@ export async function sendRouteCompletedDiscordLog(webhookUrl, { route, complete
       { name: '🏆 Finalizado Por', value: completedBy, inline: true },
     ],
     footer: {
-      text: 'Fazenda Pantaneiros • Missão Cumprida!',
+      text: `${companyName || 'Fazenda Pantaneiros'} • Missão Cumprida!`,
     },
     timestamp: new Date().toISOString(),
   };
@@ -347,5 +506,5 @@ export async function sendRouteCompletedDiscordLog(webhookUrl, { route, complete
   return sendDiscordPayload(webhookUrl, {
     content: `🎉 **ROTA FINALIZADA COM SUCESSO: ${route.title} • RECOMPENSA DE ${formatDols(route.rewardAmount)} RECEBIDA!**`,
     embeds: [embed],
-  });
+  }, { companyId: companyId || route.companyId, deletePrevious });
 }
