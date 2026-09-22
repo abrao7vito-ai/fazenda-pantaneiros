@@ -44,10 +44,18 @@ function AppLayout() {
     dbStatus
   } = useFarm();
 
-  const isLeader = currentRole === 'owner';
+  const isMaster = currentRole === 'master';
+  const isLeader = currentRole === 'owner' || isMaster;
   const pendingCount = myPendingDeliveries.length;
 
-  // Se o usuário não for líder e tentar acessar o Painel da Empresa, redireciona para metas
+  // Se o usuário for master, garante que sua visão inicial/padrão seja o Painel de Empresas
+  useEffect(() => {
+    if (isMaster && activeTab !== 'company') {
+      setActiveTab('company');
+    }
+  }, [isMaster]);
+
+  // Se o usuário não for líder/master e tentar acessar o Painel da Empresa, redireciona para metas
   useEffect(() => {
     if (activeTab === 'company' && !isLeader) {
       setActiveTab('goals');

@@ -5,6 +5,17 @@
 
 export const INITIAL_MEMBERS = [
   {
+    id: 'mem-master',
+    name: 'Master',
+    role: 'master',
+    roleLabel: 'Administrador Master Holding',
+    avatar: '⚡',
+    passport: '00',
+    phone: '',
+    pin: '9999',
+    active: true,
+  },
+  {
     id: 'mem-raquel',
     name: 'Raquel Souza',
     role: 'owner',

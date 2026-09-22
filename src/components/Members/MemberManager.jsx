@@ -33,7 +33,8 @@ export function MemberManager() {
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'manager' | 'member' | 'owner'
   const [searchQuery, setSearchQuery] = useState('');
 
-  const canManage = currentRole === 'owner' || currentRole === 'manager';
+  const isMaster = currentRole === 'master';
+  const canManage = currentRole === 'owner' || currentRole === 'manager' || isMaster;
 
   // Count stats
   const totalCount = members.length;
@@ -181,6 +182,7 @@ export function MemberManager() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredMembers.map((member) => {
           const isCurrent = currentUser.id === member.id;
+          const isMemberMaster = member.role === 'master';
           const isOwner = member.role === 'owner';
           const isManager = member.role === 'manager';
           const stats = memberPayouts.find((p) => p.member.id === member.id);
@@ -200,14 +202,22 @@ export function MemberManager() {
                 <div className="flex items-center justify-between">
                   <span
                     className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
-                      isOwner
+                      isMemberMaster
+                        ? 'bg-purple-50 text-purple-900 border-purple-300 font-extrabold'
+                        : isOwner
                         ? 'bg-amber-50 text-amber-800 border-amber-200'
                         : isManager
                         ? 'bg-blue-50 text-blue-800 border-blue-200'
                         : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                     }`}
                   >
-                    {isOwner ? '👑 Líder da Fazenda' : isManager ? '👔 Gerente' : '🌾 Membro Produtor'}
+                    {isMemberMaster
+                      ? '⚡ Administrador Master'
+                      : isOwner
+                      ? '👑 Líder da Fazenda'
+                      : isManager
+                      ? '👔 Gerente'
+                      : '🌾 Membro Produtor'}
                   </span>
 
                   {isCurrent && (
@@ -295,8 +305,8 @@ export function MemberManager() {
                       <Key className="w-4 h-4" />
                     </button>
 
-                    {/* Delete Account button (canManage, not primary owner) */}
-                    {!isOwner && (
+                    {/* Delete Account button (canManage, not primary owner or master) */}
+                    {!isOwner && !isMemberMaster && (
                       <button
                         onClick={() => setMemberToDelete(member)}
                         title={`Excluir conta de ${member.name}`}

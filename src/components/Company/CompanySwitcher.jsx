@@ -17,7 +17,7 @@ export function CompanySwitcher({ onOpenCreateCompany }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  const isOwner = currentRole === 'owner';
+  const isOwner = currentRole === 'owner' || currentRole === 'master';
 
   // Close dropdown on click outside
   useEffect(() => {

@@ -16,7 +16,9 @@ export function CreateAccountModal({ isOpen, onClose }) {
 
   const handleRoleChange = (newRole) => {
     setRole(newRole);
-    if (newRole === 'manager') {
+    if (newRole === 'owner') {
+      setAvatar('👑');
+    } else if (newRole === 'manager') {
       setAvatar('👔');
     } else {
       setAvatar('🌾');
@@ -77,13 +79,32 @@ export function CreateAccountModal({ isOpen, onClose }) {
             <label className="block text-xs font-semibold text-stone-700 mb-1.5">
               Tipo da Conta / Nível de Acesso: *
             </label>
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               
+              {/* Owner Option */}
+              <button
+                type="button"
+                onClick={() => handleRoleChange('owner')}
+                className={`p-3 rounded-2xl border text-left transition-all ${
+                  role === 'owner'
+                    ? 'bg-amber-50 border-amber-400 text-amber-900 shadow-sm ring-1 ring-amber-400'
+                    : 'bg-stone-50 border-stone-200 text-stone-600 hover:bg-stone-100'
+                }`}
+              >
+                <div className="font-bold flex items-center gap-1.5 text-xs">
+                  <Shield className="w-4 h-4 text-amber-600" />
+                  <span>👑 Conta de Dono</span>
+                </div>
+                <div className="text-[10px] text-stone-500 mt-1 leading-relaxed">
+                  Acesso total ao painel da empresa, caixas e lucros
+                </div>
+              </button>
+
               {/* Manager Option */}
               <button
                 type="button"
                 onClick={() => handleRoleChange('manager')}
-                className={`p-3.5 rounded-2xl border text-left transition-all ${
+                className={`p-3 rounded-2xl border text-left transition-all ${
                   role === 'manager'
                     ? 'bg-blue-50 border-blue-400 text-blue-900 shadow-sm ring-1 ring-blue-400'
                     : 'bg-stone-50 border-stone-200 text-stone-600 hover:bg-stone-100'
@@ -94,7 +115,7 @@ export function CreateAccountModal({ isOpen, onClose }) {
                   <span>👔 Conta de Gerente</span>
                 </div>
                 <div className="text-[10px] text-stone-500 mt-1 leading-relaxed">
-                  Pode criar metas para os membros e validar entregas de sacas
+                  Pode criar metas para os membros e validar entregas
                 </div>
               </button>
 
@@ -102,7 +123,7 @@ export function CreateAccountModal({ isOpen, onClose }) {
               <button
                 type="button"
                 onClick={() => handleRoleChange('member')}
-                className={`p-3.5 rounded-2xl border text-left transition-all ${
+                className={`p-3 rounded-2xl border text-left transition-all ${
                   role === 'member'
                     ? 'bg-emerald-50 border-emerald-400 text-emerald-900 shadow-sm ring-1 ring-emerald-400'
                     : 'bg-stone-50 border-stone-200 text-stone-600 hover:bg-stone-100'
@@ -113,7 +134,7 @@ export function CreateAccountModal({ isOpen, onClose }) {
                   <span>🌾 Conta de Membro</span>
                 </div>
                 <div className="text-[10px] text-stone-500 mt-1 leading-relaxed">
-                  Executa metas de produção e informa entregas de sacas
+                  Executa metas de produção e informa entregas
                 </div>
               </button>
 

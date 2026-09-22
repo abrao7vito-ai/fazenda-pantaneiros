@@ -22,16 +22,20 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, on
   const { currentRole, currentCompany, discordSettings, dbStatus } = useFarm();
   const [activeTab, setActiveTab] = useState('holding'); // 'holding' | 'lucros' | 'contas' | 'conexoes'
 
-  // Safety: If not owner, display locked message
-  if (currentRole !== 'owner') {
+  const isMaster = currentRole === 'master';
+  const isOwner = currentRole === 'owner';
+  const hasAccess = isMaster || isOwner;
+
+  // Safety: If not master or owner, display locked message
+  if (!hasAccess) {
     return (
       <div className="bg-white border border-stone-200 rounded-3xl p-12 text-center shadow-sm max-w-xl mx-auto">
         <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200">
           <Lock className="w-8 h-8" />
         </div>
-        <h3 className="text-lg font-bold text-stone-900">Acesso Restrito ao Dono da Empresa</h3>
+        <h3 className="text-lg font-bold text-stone-900">Acesso Restrito ao Master / Dono</h3>
         <p className="text-xs text-stone-500 mt-2">
-          O Painel da Empresa é reservado exclusivamente para os Proprietários da Fazenda Pantaneiros.
+          O Painel de Empresas e Holding é reservado exclusivamente para o Administrador Master e Proprietários.
         </p>
       </div>
     );
@@ -45,15 +49,19 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, on
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-300 flex items-center justify-center text-2xl shadow-inner">
-              {currentCompany.icon || '👑'}
+              {isMaster ? '⚡' : (currentCompany.icon || '👑')}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-extrabold text-stone-900">
                   {activeTab === 'holding' ? 'Painel Master de Empresas' : currentCompany.name}
                 </h2>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 uppercase tracking-wide">
-                  Exclusivo Dono
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide border ${
+                  isMaster 
+                    ? 'bg-purple-100 text-purple-900 border-purple-300' 
+                    : 'bg-amber-100 text-amber-900 border-amber-300'
+                }`}>
+                  {isMaster ? '⚡ Holding Master' : 'Exclusivo Dono'}
                 </span>
               </div>
               <p className="text-xs text-stone-500 mt-0.5">

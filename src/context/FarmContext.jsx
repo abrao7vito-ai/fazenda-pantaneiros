@@ -54,7 +54,15 @@ export function FarmProvider({ children }) {
   // --- Persistent States ---
   const [members, setMembers] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.MEMBERS);
-    return saved ? JSON.parse(saved) : INITIAL_MEMBERS;
+    let list = saved ? JSON.parse(saved) : INITIAL_MEMBERS;
+    // Ensure mem-master is always present in list
+    if (!list.some((m) => m.id === 'mem-master' || m.role === 'master')) {
+      const masterAcc = INITIAL_MEMBERS.find((m) => m.id === 'mem-master');
+      if (masterAcc) {
+        list = [masterAcc, ...list];
+      }
+    }
+    return list;
   });
 
   const [transactions, setTransactions] = useState(() => {
@@ -190,6 +198,11 @@ export function FarmProvider({ children }) {
 
       if (membersData && membersData.length > 0) {
         const localMembers = membersData.map(toLocalMember);
+        // Guarantee master admin account is always kept even if remote supabase DB lacks it
+        if (!localMembers.some((m) => m.id === 'mem-master' || m.role === 'master')) {
+          const masterAcc = INITIAL_MEMBERS.find((m) => m.id === 'mem-master');
+          if (masterAcc) localMembers.unshift(masterAcc);
+        }
         setMembers(localMembers);
       }
 
@@ -652,7 +665,7 @@ export function FarmProvider({ children }) {
   const pendingDeliveries = activeDeliveries.filter((d) => d.status === 'pending');
   const myPendingDeliveries = activeDeliveries.filter((d) => {
     if (d.status !== 'pending') return false;
-    if (currentRole === 'owner') return true; // Owner can validate all
+    if (currentRole === 'owner' || currentRole === 'master') return true; // Owner/Master can validate all
     return d.managerId === currentUser.id;
   });
 
@@ -994,7 +1007,11 @@ export function FarmProvider({ children }) {
     const memberToDelete = members.find((m) => m.id === id);
     if (!memberToDelete) return false;
     
-    // Safety check: Cannot delete the primary owner account if it's the last one
+    // Safety check: Cannot delete Master or primary owner account
+    if (memberToDelete.role === 'master') {
+      alert('Não é possível excluir a conta Administrador Master da Holding.');
+      return false;
+    }
     if (memberToDelete.role === 'owner' && members.filter((m) => m.role === 'owner').length <= 1) {
       alert('Não é possível excluir a conta principal do Dono da Fazenda.');
       return false;

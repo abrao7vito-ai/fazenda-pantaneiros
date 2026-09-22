@@ -19,7 +19,7 @@ export function EditProfileModal({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
-  const avatars = ['👑', '👔', '🌾', '🤠', '🚜', '🌱', '🐴', '⭐'];
+  const avatars = ['⚡', '👑', '👔', '🌾', '🤠', '🚜', '🌱', '🐴', '⭐'];
 
   const handleSubmit = (e) => {
     e.preventDefault();

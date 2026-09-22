@@ -41,11 +41,17 @@ export function Sidebar({
     currentCompany,
   } = useFarm();
 
-  const isLeader = currentRole === 'owner';
+  const isMaster = currentRole === 'master';
+  const isLeader = currentRole === 'owner' || isMaster;
   const pendingCount = myPendingDeliveries.length;
 
   const getRoleBadge = (role) => {
     switch (role) {
+      case 'master':
+        return {
+          label: '⚡ Master Holding',
+          badge: 'bg-purple-100 text-purple-900 border-purple-300 font-extrabold',
+        };
       case 'owner':
         return {
           label: '👑 Líder / Dono',
@@ -66,36 +72,62 @@ export function Sidebar({
 
   const roleBadge = getRoleBadge(currentRole);
 
-  // Nav items: Empresa (Holding, Lucros, Contas) é APENAS visível para o Dono
-  const navItems = [
-    {
-      id: 'goals',
-      label: 'Metas & Entregas',
-      subtitle: `${currentCompany?.unitLabel || 'Produção'} & Validação`,
-      icon: Target,
-      badge: pendingCount > 0 ? `${pendingCount} Pendente` : null,
-      badgeColor: 'bg-amber-100 text-amber-800 border-amber-300 animate-pulse',
-    },
-    {
-      id: 'cashflow',
-      label: 'Fluxo de Caixa',
-      subtitle: 'Lançamentos em DOLS',
-      icon: LayoutDashboard,
-      badge: null,
-    },
-    ...(isLeader
-      ? [
-          {
-            id: 'company',
-            label: 'Painel da Empresa',
-            subtitle: 'Holding Master, Lucros & Equipe',
-            icon: Building2,
-            badge: '👑 Dono',
-            badgeColor: 'bg-amber-50 text-amber-800 border-amber-300',
-          },
-        ]
-      : []),
-  ];
+  // Nav items: Se for Master, o Painel de Empresas / Holding vem em primeiro lugar no menu!
+  const navItems = isMaster
+    ? [
+        {
+          id: 'company',
+          label: 'Gestão de Empresas',
+          subtitle: 'Criar, Gerenciar & Holding',
+          icon: Building2,
+          badge: '⚡ Master',
+          badgeColor: 'bg-purple-100 text-purple-900 border-purple-300 font-bold',
+        },
+        {
+          id: 'goals',
+          label: 'Metas & Entregas',
+          subtitle: `${currentCompany?.unitLabel || 'Produção'} & Validação`,
+          icon: Target,
+          badge: pendingCount > 0 ? `${pendingCount} Pendente` : null,
+          badgeColor: 'bg-amber-100 text-amber-800 border-amber-300 animate-pulse',
+        },
+        {
+          id: 'cashflow',
+          label: 'Fluxo de Caixa',
+          subtitle: 'Lançamentos em DOLS',
+          icon: LayoutDashboard,
+          badge: null,
+        },
+      ]
+    : [
+        {
+          id: 'goals',
+          label: 'Metas & Entregas',
+          subtitle: `${currentCompany?.unitLabel || 'Produção'} & Validação`,
+          icon: Target,
+          badge: pendingCount > 0 ? `${pendingCount} Pendente` : null,
+          badgeColor: 'bg-amber-100 text-amber-800 border-amber-300 animate-pulse',
+        },
+        {
+          id: 'cashflow',
+          label: 'Fluxo de Caixa',
+          subtitle: 'Lançamentos em DOLS',
+          icon: LayoutDashboard,
+          badge: null,
+        },
+        ...(isLeader
+          ? [
+              {
+                id: 'company',
+                label: 'Painel da Empresa',
+                subtitle: 'Holding Master, Lucros & Equipe',
+                icon: Building2,
+                badge: '👑 Dono',
+                badgeColor: 'bg-amber-50 text-amber-800 border-amber-300',
+              },
+            ]
+          : []),
+      ];
 
   return (
     <aside className="w-72 bg-white border-r border-stone-200/80 flex flex-col justify-between shrink-0 h-screen sticky top-0 overflow-y-auto select-none shadow-sm">
