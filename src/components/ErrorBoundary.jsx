@@ -20,10 +20,15 @@ export class ErrorBoundary extends React.Component {
     try {
       localStorage.clear();
       sessionStorage.clear();
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        caches.keys().then((names) => {
+          names.forEach((name) => caches.delete(name));
+        });
+      }
     } catch (e) {
       console.error(e);
     }
-    window.location.reload();
+    window.location.href = window.location.origin + window.location.pathname + '?v=' + Date.now();
   };
 
   render() {
