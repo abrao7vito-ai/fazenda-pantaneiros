@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFarm } from '../../context/FarmContext';
 import { ProfitSplitView } from '../OwnerProfitSplit/ProfitSplitView';
 import { MemberManager } from '../Members/MemberManager';
