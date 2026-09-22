@@ -1660,6 +1660,46 @@ export function FarmProvider({ children }) {
     return routeObj;
   };
 
+  const updateCustomRoute = (routeId, updatedData) => {
+    const updated = routes.map((r) => {
+      if (r.id !== routeId) return r;
+      return {
+        ...r,
+        title: updatedData.title !== undefined ? updatedData.title : r.title,
+        rewardAmount: updatedData.rewardAmount !== undefined ? Number(updatedData.rewardAmount) : r.rewardAmount,
+        icon: updatedData.icon !== undefined ? updatedData.icon : r.icon,
+        description: updatedData.description !== undefined ? updatedData.description : r.description,
+        companyId: updatedData.companyId !== undefined ? updatedData.companyId : r.companyId,
+        items: updatedData.items !== undefined ? updatedData.items : r.items,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    setRoutes(updated);
+
+    if (supabase) {
+      supabase.from('farm_settings').upsert({
+        key: 'routes',
+        value: updated,
+        updated_at: new Date().toISOString(),
+      }).then();
+    }
+  };
+
+  const deleteCustomRoute = (routeId) => {
+    const updated = routes.filter((r) => r.id !== routeId);
+    setRoutes(updated);
+
+    if (supabase) {
+      supabase.from('farm_settings').upsert({
+        key: 'routes',
+        value: updated,
+        updated_at: new Date().toISOString(),
+      }).then();
+    }
+  };
+
+
   const dispatchRouteBatch = (routeId, batchCount = 1) => {
     const route = routes.find((r) => r.id === routeId);
     if (!route) return { success: false, message: 'Rota não encontrada.' };
@@ -1854,6 +1894,8 @@ export function FarmProvider({ children }) {
         completeRoute,
         resetRoute,
         addCustomRoute,
+        updateCustomRoute,
+        deleteCustomRoute,
         dispatchRouteBatch,
         // Discord Webhook Integration
         discordSettings: getCompanyDiscordSettings(currentCompanyId),

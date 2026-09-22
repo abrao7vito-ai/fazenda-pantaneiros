@@ -21,7 +21,12 @@ import {
   TrendingUp,
   Zap,
   AlertTriangle,
-  Warehouse
+  Warehouse,
+  Edit3,
+  Trash2,
+  X,
+  Save,
+  Settings
 } from 'lucide-react';
 
 function getAnimalRouteMetrics(route) {
@@ -68,6 +73,8 @@ export function RouteChecklistManager() {
     completeRoute, 
     resetRoute, 
     addCustomRoute,
+    updateCustomRoute,
+    deleteCustomRoute,
     dispatchRouteBatch,
     currentCompany,
     currentRole,
@@ -86,6 +93,16 @@ export function RouteChecklistManager() {
   const [newIcon, setNewIcon] = useState('🚂');
   const [newDesc, setNewDesc] = useState('');
   const [newItemsText, setNewItemsText] = useState('15x Saco de café\n15x Saco de Amora\n15x Saco de algodão\n15x Saco de Milho\n400x Garrafas de Leite');
+
+  // Edit route state
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingRoute, setEditingRoute] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editReward, setEditReward] = useState('2500');
+  const [editIcon, setEditIcon] = useState('📦');
+  const [editDesc, setEditDesc] = useState('');
+  const [editCompanyId, setEditCompanyId] = useState('');
+  const [editItems, setEditItems] = useState([]);
 
   const isLeader = currentRole === 'owner' || currentRole === 'manager' || currentRole === 'master';
 
@@ -131,6 +148,99 @@ export function RouteChecklistManager() {
       alert(res.message);
     } else {
       alert(`🎉 Viagem despachada com sucesso!\n\n+$ ${res.rewardEarned.toLocaleString('pt-BR')} creditados no caixa.\nRestam estoque para mais ${res.remainingRoutes} rota(s) pronta(s).`);
+    }
+  };
+
+  // Edit Route Handlers
+  const handleOpenEdit = (route) => {
+    setEditingRoute(route);
+    setEditTitle(route.title || '');
+    setEditReward(String(route.rewardAmount || 0));
+    setEditIcon(route.icon || '📦');
+    setEditDesc(route.description || '');
+    setEditCompanyId(route.companyId || currentCompany?.id || 'comp-fazenda');
+    setEditItems((route.items || []).map((it, idx) => ({
+      id: it.id || `item-${Date.now()}-${idx}`,
+      name: it.name || '',
+      icon: it.icon || '📦',
+      perRoute: Number(it.perRoute || (it.targetAmount >= 2000 ? 100 : it.targetAmount >= 400 ? 20 : 20)),
+      targetAmount: Number(it.targetAmount || 10),
+      currentAmount: Number(it.currentAmount || 0),
+      unit: it.unit || 'un',
+    })));
+    setIsEditOpen(true);
+  };
+
+  const handleEditItemChange = (index, field, value) => {
+    setEditItems((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const handleAddEditItem = () => {
+    setEditItems((prev) => [
+      ...prev,
+      {
+        id: `item-${Date.now()}-${prev.length}`,
+        name: 'Novo Item',
+        icon: '📦',
+        perRoute: 20,
+        targetAmount: 400,
+        currentAmount: 0,
+        unit: 'un',
+      },
+    ]);
+  };
+
+  const handleRemoveEditItem = (index) => {
+    setEditItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveEditSubmit = (e) => {
+    e.preventDefault();
+    if (!editTitle.trim()) {
+      alert('Informe o título da rota.');
+      return;
+    }
+    if (editItems.length === 0) {
+      alert('A rota precisa ter pelo menos 1 item exigido.');
+      return;
+    }
+
+    updateCustomRoute(editingRoute.id, {
+      title: editTitle.trim(),
+      rewardAmount: parseFloat(editReward) || 0,
+      icon: editIcon || '📦',
+      description: editDesc.trim(),
+      companyId: editCompanyId || editingRoute.companyId,
+      items: editItems.map((it) => {
+        const targetAmount = Math.max(1, parseFloat(it.targetAmount) || 1);
+        const perRoute = Math.max(1, parseFloat(it.perRoute) || 1);
+        const currentAmount = Math.max(0, parseFloat(it.currentAmount) || 0);
+        return {
+          ...it,
+          name: it.name.trim() || 'Item',
+          targetAmount,
+          perRoute,
+          currentAmount,
+          completed: currentAmount >= targetAmount,
+        };
+      }),
+    });
+
+    setIsEditOpen(false);
+    setEditingRoute(null);
+    alert('Rota atualizada com sucesso e sincronizada com o Discord!');
+  };
+
+  const handleDeleteRoute = (routeId, title) => {
+    if (window.confirm(`Tem certeza que deseja EXCLUIR permanentemente a rota "${title}"?\n\nEsta ação não poderá ser revertida.`)) {
+      deleteCustomRoute(routeId);
+      setIsEditOpen(false);
+      setEditingRoute(null);
+      alert('Rota excluída com sucesso.');
     }
   };
 
@@ -343,13 +453,26 @@ export function RouteChecklistManager() {
                         </div>
                       </div>
 
-                      {/* Reward Tag */}
-                      <div className="text-right shrink-0">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Recompensa / Rota</div>
-                        <span className="font-mono font-black text-xl sm:text-2xl text-[#22c55e] tracking-tight bg-stone-900/90 border border-stone-800 px-4 py-2 rounded-2xl shadow-inner inline-block">
-                          ${route.rewardAmount || 4600}
-                        </span>
-                        <div className="text-[10px] text-stone-500 mt-1 font-mono">Meta 20x = $ 92.000</div>
+                      {/* Reward Tag & Actions */}
+                      <div className="flex flex-col sm:items-end gap-2 shrink-0">
+                        <div className="text-right">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Recompensa / Rota</div>
+                          <span className="font-mono font-black text-xl sm:text-2xl text-[#22c55e] tracking-tight bg-stone-900/90 border border-stone-800 px-4 py-2 rounded-2xl shadow-inner inline-block">
+                            ${route.rewardAmount || 4600}
+                          </span>
+                          <div className="text-[10px] text-stone-500 mt-1 font-mono">Meta 20x = $ 92.000</div>
+                        </div>
+                        {isLeader && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(route)}
+                            className="py-1.5 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 border border-stone-700/60"
+                            title="Editar Parâmetros da Rota"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Editar Rota</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -681,7 +804,19 @@ export function RouteChecklistManager() {
                       <span>Ferrovia West Fox • Gestão de Estoque & Rotas de Animais</span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isLeader && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(route)}
+                          className="py-2.5 px-3.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 border border-stone-700"
+                          title="Editar Itens e Metas da Rota"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Editar Rota</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => {
@@ -761,11 +896,22 @@ export function RouteChecklistManager() {
                       </div>
                     </div>
 
-                    {/* Reward Amount in Game Style Red/Gold Tag */}
-                    <div className="text-right shrink-0">
+                    {/* Reward Amount & Leader Edit Button */}
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
                       <span className="font-mono font-black text-base sm:text-xl text-[#e8533c] tracking-tight bg-stone-900/90 border border-stone-800 px-3 py-1.5 rounded-xl shadow-inner inline-block">
                         ${route.rewardAmount}
                       </span>
+                      {isLeader && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(route)}
+                          className="py-1 px-2.5 rounded-lg bg-stone-800/90 hover:bg-stone-700 text-stone-300 hover:text-white text-[11px] font-bold transition-colors cursor-pointer flex items-center gap-1 border border-stone-700/60"
+                          title="Editar Rota"
+                        >
+                          <Edit3 className="w-3 h-3 text-amber-400" />
+                          <span>Editar</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -995,6 +1141,17 @@ export function RouteChecklistManager() {
                   </div>
 
                   <div className="flex items-center gap-2 w-full sm:w-auto">
+                    {isLeader && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEdit(route)}
+                        className="p-2.5 rounded-xl bg-stone-800/80 hover:bg-stone-700 text-stone-300 hover:text-white text-xs font-bold transition-colors cursor-pointer border border-stone-700/60"
+                        title="Editar Rota"
+                      >
+                        <Edit3 className="w-4 h-4 text-amber-400" />
+                      </button>
+                    )}
+
                     {/* Reset button */}
                     <button
                       type="button"
@@ -1166,6 +1323,268 @@ export function RouteChecklistManager() {
                 </button>
               </div>
 
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar Rota Existente */}
+      {isEditOpen && editingRoute && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn overflow-y-auto">
+          <div className="bg-[#181615] border border-stone-700/80 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl my-8 text-stone-100 flex flex-col max-h-[90vh]">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800 bg-[#1e1b19] shrink-0">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl p-2 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+                  {editIcon || '📦'}
+                </span>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                    <span>Editar Rota & Missão</span>
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      Líder
+                    </span>
+                  </h3>
+                  <p className="text-xs text-stone-400">
+                    Altere o nome, valor, ícone e itens exigidos da rota
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setIsEditOpen(false); setEditingRoute(null); }}
+                className="p-2 rounded-xl text-stone-400 hover:text-white hover:bg-stone-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleSaveEditSubmit} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-6 space-y-5 overflow-y-auto flex-1">
+                
+                {/* Title & Icon Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div className="sm:col-span-3">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-stone-400 mb-1.5">
+                      Nome da Rota / Missão *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      placeholder="Ex: Rota de Animais, Entrega Fazendeiros..."
+                      className="w-full bg-stone-900 border border-stone-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-white focus:border-amber-400 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-stone-400 mb-1.5">
+                      Ícone
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={editIcon}
+                      onChange={(e) => setEditIcon(e.target.value)}
+                      className="w-full bg-stone-900 border border-stone-700 rounded-xl px-3 py-2 text-center text-lg focus:border-amber-400 outline-none"
+                      placeholder="🐄"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Icon Selector */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-stone-400 font-bold uppercase">Ícones rápidos:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {['🐄', '🚂', '📦', '🍺', '🌾', '🚜', '⛏️', '🍞', '🐎', '🍖'].map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => setEditIcon(emoji)}
+                        className={`w-7 h-7 rounded-lg text-sm flex items-center justify-center transition-all cursor-pointer ${
+                          editIcon === emoji ? 'bg-amber-500 scale-110' : 'bg-stone-800 hover:bg-stone-700'
+                        }`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Reward & Description Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-stone-400 mb-1.5">
+                      Recompensa ($ DOLS)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-stone-500 font-mono font-bold">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="50"
+                        required
+                        value={editReward}
+                        onChange={(e) => setEditReward(e.target.value)}
+                        className="w-full bg-stone-900 border border-stone-700 rounded-xl pl-8 pr-3 py-2.5 text-sm font-mono font-bold text-emerald-400 focus:border-amber-400 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-stone-400 mb-1.5">
+                      Descrição / Instruções
+                    </label>
+                    <input
+                      type="text"
+                      value={editDesc}
+                      onChange={(e) => setEditDesc(e.target.value)}
+                      placeholder="Ex: 1 Rota = 20x queijos e 100x leites..."
+                      className="w-full bg-stone-900 border border-stone-700 rounded-xl px-3.5 py-2.5 text-sm text-stone-300 focus:border-amber-400 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Items Management List */}
+                <div className="space-y-2 pt-2 border-t border-stone-800">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-stone-300">
+                        Itens Exigidos da Rota ({editItems.length})
+                      </h4>
+                      <p className="text-[11px] text-stone-500">
+                        Defina o nome do item, custo por rota e a meta total acumulada.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddEditItem}
+                      className="py-1.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-stone-950 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-amber-500/40"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Adicionar Item</span>
+                    </button>
+                  </div>
+
+                  {/* Items List */}
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {editItems.map((it, idx) => (
+                      <div
+                        key={it.id || idx}
+                        className="p-3 rounded-2xl bg-stone-900/90 border border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:border-stone-700 transition-colors"
+                      >
+                        {/* Item Icon + Name */}
+                        <div className="flex items-center gap-2 flex-1">
+                          <input
+                            type="text"
+                            maxLength={2}
+                            value={it.icon || '📦'}
+                            onChange={(e) => handleEditItemChange(idx, 'icon', e.target.value)}
+                            className="w-9 h-9 rounded-xl bg-stone-950 border border-stone-700 text-center text-base focus:border-amber-400 outline-none shrink-0"
+                            title="Ícone do Item"
+                          />
+                          <input
+                            type="text"
+                            required
+                            value={it.name}
+                            onChange={(e) => handleEditItemChange(idx, 'name', e.target.value)}
+                            placeholder="Nome do Item"
+                            className="flex-1 bg-stone-950 border border-stone-700 rounded-xl px-3 py-1.5 text-xs font-bold text-white focus:border-amber-400 outline-none"
+                          />
+                        </div>
+
+                        {/* Quantities: perRoute, targetAmount, currentAmount */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div title="Custo para fazer 1 viagem (unidades gastas por rota)">
+                            <span className="block text-[9px] font-bold text-stone-500 uppercase">P/ Rota</span>
+                            <input
+                              type="number"
+                              min="1"
+                              required
+                              value={it.perRoute || 1}
+                              onChange={(e) => handleEditItemChange(idx, 'perRoute', Math.max(1, parseFloat(e.target.value) || 1))}
+                              className="w-16 bg-stone-950 border border-stone-700 rounded-lg px-2 py-1 text-xs font-mono font-bold text-amber-400 text-center focus:border-amber-400 outline-none"
+                            />
+                          </div>
+
+                          <div title="Meta total de estoque acumulado no ciclo">
+                            <span className="block text-[9px] font-bold text-stone-500 uppercase">Meta Total</span>
+                            <input
+                              type="number"
+                              min="1"
+                              required
+                              value={it.targetAmount || 1}
+                              onChange={(e) => handleEditItemChange(idx, 'targetAmount', Math.max(1, parseFloat(e.target.value) || 1))}
+                              className="w-18 bg-stone-950 border border-stone-700 rounded-lg px-2 py-1 text-xs font-mono font-bold text-emerald-400 text-center focus:border-amber-400 outline-none"
+                            />
+                          </div>
+
+                          <div title="Estoque atual carregado">
+                            <span className="block text-[9px] font-bold text-stone-500 uppercase">Estoque</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={it.currentAmount || 0}
+                              onChange={(e) => handleEditItemChange(idx, 'currentAmount', Math.max(0, parseFloat(e.target.value) || 0))}
+                              className="w-18 bg-stone-950 border border-stone-700 rounded-lg px-2 py-1 text-xs font-mono font-bold text-stone-200 text-center focus:border-amber-400 outline-none"
+                            />
+                          </div>
+
+                          {/* Remove item button */}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveEditItem(idx)}
+                            disabled={editItems.length <= 1}
+                            className={`p-2 rounded-xl mt-3 transition-colors ${
+                              editItems.length <= 1
+                                ? 'text-stone-700 cursor-not-allowed'
+                                : 'text-red-400 hover:text-red-300 hover:bg-red-500/20 cursor-pointer'
+                            }`}
+                            title={editItems.length <= 1 ? 'A rota deve ter pelo menos 1 item' : 'Remover item da rota'}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="px-6 py-4 border-t border-stone-800 bg-[#1e1b19] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                {/* Delete entire route */}
+                <button
+                  type="button"
+                  onClick={() => handleDeleteRoute(editingRoute.id, editingRoute.title)}
+                  className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/25 text-red-400 hover:text-red-300 font-bold text-xs border border-red-500/30 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Excluir Rota</span>
+                </button>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => { setIsEditOpen(false); setEditingRoute(null); }}
+                    className="flex-1 sm:flex-none py-2.5 px-4 rounded-xl text-xs font-bold text-stone-400 hover:text-white hover:bg-stone-800 transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 sm:flex-none py-2.5 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Salvar Alterações</span>
+                  </button>
+                </div>
+              </div>
             </form>
 
           </div>
