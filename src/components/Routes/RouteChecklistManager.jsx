@@ -600,6 +600,7 @@ export function RouteChecklistManager() {
                           const routesCovered = Math.floor(curr / perRoute);
                           const isItemGoalReached = curr >= item.targetAmount;
                           const hasEnoughForOne = curr >= perRoute;
+                          const missingForGoal = Math.max(0, Number(item.targetAmount || 0) - curr);
 
                           return (
                             <div
@@ -620,8 +621,20 @@ export function RouteChecklistManager() {
                                     <div className="text-sm font-extrabold text-stone-100 flex items-center gap-1.5">
                                       <span>{item.name}</span>
                                     </div>
-                                    <div className="text-[10px] text-stone-400 font-mono">
-                                      Custo: <strong className="text-amber-400">{perRoute}x</strong> por rota
+                                    <div className="text-[10px] font-mono flex items-center gap-1.5 flex-wrap mt-0.5">
+                                      <span className="text-stone-400">
+                                        Custo: <strong className="text-amber-400">{perRoute}x</strong>/rota
+                                      </span>
+                                      <span className="text-stone-600">•</span>
+                                      {missingForGoal > 0 ? (
+                                        <span className="text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                          Falta: <strong className="text-amber-300">{missingForGoal}x</strong>
+                                        </span>
+                                      ) : (
+                                        <span className="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                          ✓ Meta 20x OK
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -635,14 +648,25 @@ export function RouteChecklistManager() {
                                       ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                                       : 'bg-red-500/20 text-red-400 border-red-500/30'
                                   }`}>
-                                    {routesCovered >= 20 ? '✓ Meta 20x OK' : `${routesCovered} rotas`}
+                                    {routesCovered >= 20 ? '✓ 20x Prontas' : `${routesCovered} rotas`}
                                   </span>
                                 </div>
                               </div>
 
                               {/* Direct Numeric Input Row */}
                               <div className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80 flex items-center justify-between gap-2">
-                                <span className="text-[11px] font-bold text-stone-400 font-mono">Estoque:</span>
+                                <div className="flex flex-col">
+                                  <span className="text-[11px] font-bold text-stone-400 font-mono">Estoque:</span>
+                                  {missingForGoal > 0 ? (
+                                    <span className="text-[10px] font-mono font-bold text-amber-400">
+                                      Falta: <span className="text-amber-300 font-black">{missingForGoal}x</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-mono font-bold text-emerald-400">
+                                      ✓ Meta 100%
+                                    </span>
+                                  )}
+                                </div>
                                 
                                 <div className="flex items-center gap-1.5">
                                   <input
@@ -678,6 +702,14 @@ export function RouteChecklistManager() {
 
                               {/* Progress bar towards 20 routes */}
                               <div className="space-y-1">
+                                <div className="flex items-center justify-between text-[10px] font-mono text-stone-400">
+                                  <span>{Math.min(100, Math.round((curr / item.targetAmount) * 100))}% da meta</span>
+                                  {missingForGoal > 0 ? (
+                                    <span className="text-amber-400 font-bold">Faltam {missingForGoal} un</span>
+                                  ) : (
+                                    <span className="text-emerald-400 font-bold">Meta atingida</span>
+                                  )}
+                                </div>
                                 <div className="w-full h-1.5 bg-stone-950 rounded-full overflow-hidden border border-stone-800">
                                   <div
                                     className={`h-full transition-all duration-300 rounded-full ${
@@ -947,6 +979,9 @@ export function RouteChecklistManager() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {(route.items || []).map((item) => {
                         const itemDone = item.completed || Number(item.currentAmount) >= Number(item.targetAmount);
+                        const currentVal = Number(item.currentAmount || 0);
+                        const targetVal = Number(item.targetAmount || 1);
+                        const missingVal = Math.max(0, targetVal - currentVal);
 
                         return (
                           <div
@@ -973,15 +1008,24 @@ export function RouteChecklistManager() {
                               </button>
 
                               <div className="min-w-0 flex-1">
-                                <div className="text-xs font-bold truncate flex items-center gap-1.5">
+                                <div className="text-xs font-bold truncate flex items-center gap-1.5 flex-wrap">
                                   <span className={`font-mono font-black text-[11px] ${itemDone ? 'text-emerald-400' : 'text-[#e8533c]'}`}>
                                     {item.targetAmount}x
                                   </span>
                                   <span className="truncate">{item.name}</span>
+                                  {missingVal > 0 ? (
+                                    <span className="text-[9px] font-mono font-bold text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                      Falta {missingVal}x
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                      ✓ Completo
+                                    </span>
+                                  )}
                                 </div>
 
                                 {/* Campo Editável Manual: Digite qualquer quantidade diretamente */}
-                                <div className="flex items-center gap-1.5 mt-1">
+                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                   <span className="text-[10px] text-stone-400 font-mono">Coletado:</span>
                                   <input
                                     type="number"
@@ -1014,6 +1058,15 @@ export function RouteChecklistManager() {
                                     title="Clique para digitar qualquer quantidade e pressione Enter"
                                   />
                                   <span className="text-[10px] text-stone-400 font-mono">/ {item.targetAmount}</span>
+                                  {missingVal > 0 ? (
+                                    <span className="text-[10px] font-mono font-bold text-amber-300">
+                                      (-{missingVal})
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-mono font-bold text-emerald-400">
+                                      (OK)
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </div>
