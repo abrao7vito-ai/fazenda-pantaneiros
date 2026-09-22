@@ -556,15 +556,17 @@ export function FarmProvider({ children }) {
     fallbackCompany;
 
   // Strict SaaS Multi-Tenant Isolation:
-  // Non-master users are locked to their own company at all times.
+  // Non-master users are strictly locked to their own assigned company at all times.
   useEffect(() => {
-    if (isAuthenticated && currentRole !== 'master' && currentUser?.companyId) {
-      const userCompany = currentUser.companyId !== 'all' ? currentUser.companyId : 'comp-fazenda';
-      if (currentCompanyId !== userCompany) {
-        setCurrentCompanyId(userCompany);
+    if (currentRole !== 'master' && currentUser?.companyId && currentUser.companyId !== 'all') {
+      if (currentCompanyId !== currentUser.companyId) {
+        setCurrentCompanyId(currentUser.companyId);
+        try {
+          localStorage.setItem(STORAGE_KEYS.ACTIVE_COMPANY, currentUser.companyId);
+        } catch (_) {}
       }
     }
-  }, [isAuthenticated, currentRole, currentUser?.companyId, currentCompanyId]);
+  }, [currentRole, currentUser?.companyId, currentCompanyId]);
 
   const selectCompany = (companyId) => {
     // Only master account can switch companies

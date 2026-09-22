@@ -38,12 +38,28 @@ export function extractCompanyTag(text = '', fallback = 'comp-fazenda') {
 
 export function toLocalMember(row) {
   if (!row) return null;
+  const { companyId: taggedCompanyId, cleanText: cleanRoleLabel } = extractCompanyTag(row.role_label || '');
+
+  let detectedCompanyId = row.company_id || taggedCompanyId;
+  if (!detectedCompanyId || detectedCompanyId === 'comp-fazenda') {
+    const textToCheck = ((row.role_label || '') + ' ' + (row.name || '')).toLowerCase();
+    if (textToCheck.includes('ferrovia')) {
+      detectedCompanyId = 'comp-ferrovia';
+    } else if (textToCheck.includes('taberna') || textToCheck.includes('taverna')) {
+      detectedCompanyId = 'comp-taverna';
+    } else if (row.role === 'master' || row.id === 'mem-master') {
+      detectedCompanyId = 'all';
+    } else {
+      detectedCompanyId = 'comp-fazenda';
+    }
+  }
+
   return {
     id: row.id,
     name: row.name || 'Sem nome',
     role: row.role || 'member',
-    roleLabel: row.role_label || (row.role === 'owner' ? 'Líder / Dono' : row.role === 'manager' ? 'Gerente' : 'Membro'),
-    companyId: row.company_id || (row.role === 'master' ? 'all' : 'comp-fazenda'),
+    roleLabel: cleanRoleLabel || row.role_label || (row.role === 'owner' ? 'Líder / Dono' : row.role === 'manager' ? 'Gerente' : 'Membro'),
+    companyId: (row.role === 'master' || row.id === 'mem-master') ? 'all' : detectedCompanyId,
     avatar: row.avatar || (row.role === 'owner' ? '👑' : row.role === 'manager' ? '👔' : '🌾'),
     passport: row.passport ? String(row.passport) : '',
     phone: row.phone || '',
@@ -55,11 +71,16 @@ export function toLocalMember(row) {
 
 export function toDbMember(m) {
   if (!m) return null;
+  const rawLabel = m.roleLabel || (m.role === 'owner' ? 'Líder / Dono' : m.role === 'manager' ? 'Gerente' : 'Membro');
+  const roleLabelWithTag = m.companyId && m.companyId !== 'comp-fazenda' && m.companyId !== 'all'
+    ? encodeCompanyTag(rawLabel, m.companyId)
+    : rawLabel;
+
   return {
     id: m.id,
     name: m.name,
     role: m.role,
-    role_label: m.roleLabel,
+    role_label: roleLabelWithTag,
     avatar: m.avatar,
     passport: m.passport || '',
     phone: m.phone || '',

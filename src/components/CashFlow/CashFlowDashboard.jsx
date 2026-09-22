@@ -17,7 +17,8 @@ export function CashFlowDashboard({ onOpenNewTransaction }) {
     totalIncome, 
     totalExpense, 
     netProfit, 
-    transactions
+    transactions,
+    currentCompany
   } = useFarm();
 
   const totalVolume = totalIncome + totalExpense;
@@ -35,12 +36,12 @@ export function CashFlowDashboard({ onOpenNewTransaction }) {
               <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
               <span>Painel Financeiro & Operacional</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-stone-900 tracking-tight">
-              Fluxo de Caixa da Fazenda Pantaneiros
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-stone-900 tracking-tight flex items-center gap-2.5">
+              <span>{currentCompany?.icon || '🏢'}</span>
+              <span>Fluxo de Caixa • {currentCompany?.name || 'Empresa'}</span>
             </h1>
             <p className="text-sm text-stone-600 max-w-2xl leading-relaxed">
-              Monitore todas as entradas de DOLS da produção, despesas com maquinário e insumos,
-              saldo disponível em cofre e histórico completo de transações.
+              Monitore todas as entradas de DOLS, despesas operacionais e saldo disponível no cofre de {currentCompany?.name || 'sua empresa'}.
             </p>
           </div>
 
