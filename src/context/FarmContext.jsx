@@ -156,16 +156,30 @@ export function FarmProvider({ children }) {
   });
 
   const [discordSettings, setDiscordSettings] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.DISCORD);
-    return saved
-      ? JSON.parse(saved)
-      : {
-          webhookUrl: '',
-          enabled: true,
-          autoCashflow: true,
-          autoDeliveries: true,
-          autoPayroll: true,
-        };
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.DISCORD);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            webhookUrl: parsed.webhookUrl || '',
+            enabled: parsed.enabled ?? true,
+            autoCashflow: parsed.autoCashflow ?? true,
+            autoDeliveries: parsed.autoDeliveries ?? true,
+            autoPayroll: parsed.autoPayroll ?? true,
+            byCompany: parsed.byCompany || {},
+          };
+        }
+      }
+    } catch (_) {}
+    return {
+      webhookUrl: '',
+      enabled: true,
+      autoCashflow: true,
+      autoDeliveries: true,
+      autoPayroll: true,
+      byCompany: {},
+    };
   });
 
   const [routes, setRoutes] = useState(() => {
@@ -319,11 +333,17 @@ export function FarmProvider({ children }) {
           }
           if (row.key === 'discord' && row.value) {
             setDiscordSettings((prev) => {
-              if (row.value?.webhookUrl) {
-                return row.value;
+              const cloudVal = row.value;
+              const hasCloud = cloudVal?.webhookUrl || (cloudVal?.byCompany && Object.keys(cloudVal.byCompany).length > 0);
+              const hasLocal = prev?.webhookUrl || (prev?.byCompany && Object.keys(prev.byCompany).length > 0);
+              if (hasCloud) {
+                return {
+                  ...cloudVal,
+                  byCompany: cloudVal.byCompany || {},
+                };
               }
-              if (prev?.webhookUrl) {
-                // If local has a webhook URL, persist it up to Supabase
+              if (hasLocal) {
+                // If local has a webhook URL or company webhooks, persist it up to Supabase
                 supabase.from('farm_settings').upsert({
                   key: 'discord',
                   value: prev,
@@ -331,7 +351,10 @@ export function FarmProvider({ children }) {
                 }).then();
                 return prev;
               }
-              return row.value;
+              return {
+                ...cloudVal,
+                byCompany: cloudVal?.byCompany || {},
+              };
             });
           }
         });
@@ -406,7 +429,13 @@ export function FarmProvider({ children }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'farm_settings' }, (payload) => {
         if (payload.new) {
           if (payload.new.key === 'split' && payload.new.value) setSplitSettings(payload.new.value);
-          if (payload.new.key === 'discord' && payload.new.value) setDiscordSettings(payload.new.value);
+          if (payload.new.key === 'discord' && payload.new.value) {
+            const val = payload.new.value;
+            setDiscordSettings({
+              ...val,
+              byCompany: val?.byCompany || {},
+            });
+          }
           if (payload.new.key === 'companies' && Array.isArray(payload.new.value)) setCompanies(payload.new.value);
           if (payload.new.key === 'routes' && Array.isArray(payload.new.value)) setRoutes(payload.new.value);
         }
@@ -554,6 +583,30 @@ export function FarmProvider({ children }) {
     (companies && companies.find((c) => c && c.id === currentCompanyId)) ||
     (companies && companies[0]) ||
     fallbackCompany;
+
+  // Multi-Company Discord Webhook Settings Resolver:
+  // Resolves the specific webhook configuration for the specified company,
+  // falling back gracefully to global settings if not yet customized.
+  const getCompanyDiscordSettings = (companyId) => {
+    const cId = companyId || currentCompanyId || 'comp-fazenda';
+    const compSettings = discordSettings?.byCompany?.[cId];
+    if (compSettings && typeof compSettings === 'object' && compSettings.webhookUrl) {
+      return {
+        webhookUrl: compSettings.webhookUrl || '',
+        enabled: compSettings.enabled ?? (discordSettings?.enabled ?? true),
+        autoCashflow: compSettings.autoCashflow ?? (discordSettings?.autoCashflow ?? true),
+        autoDeliveries: compSettings.autoDeliveries ?? (discordSettings?.autoDeliveries ?? true),
+        autoPayroll: compSettings.autoPayroll ?? (discordSettings?.autoPayroll ?? true),
+      };
+    }
+    return {
+      webhookUrl: compSettings?.webhookUrl || discordSettings?.webhookUrl || '',
+      enabled: compSettings?.enabled ?? (discordSettings?.enabled ?? true),
+      autoCashflow: compSettings?.autoCashflow ?? (discordSettings?.autoCashflow ?? true),
+      autoDeliveries: compSettings?.autoDeliveries ?? (discordSettings?.autoDeliveries ?? true),
+      autoPayroll: compSettings?.autoPayroll ?? (discordSettings?.autoPayroll ?? true),
+    };
+  };
 
   // Strict SaaS Multi-Tenant Isolation:
   // Non-master users are strictly locked to their own assigned company at all times.
@@ -897,8 +950,10 @@ export function FarmProvider({ children }) {
     });
 
     // Automatic Discord Webhook Log for Cash Flow
-    if (discordSettings?.enabled && discordSettings?.autoCashflow && discordSettings?.webhookUrl) {
-      sendCashFlowDiscordLog(discordSettings.webhookUrl, {
+    const txCompany = companies.find((c) => c.id === activeCompId) || currentCompany;
+    const txDiscord = getCompanyDiscordSettings(activeCompId);
+    if (txDiscord?.enabled && txDiscord?.autoCashflow && txDiscord?.webhookUrl) {
+      sendCashFlowDiscordLog(txDiscord.webhookUrl, {
         type,
         amount: numAmount,
         personName: member.name,
@@ -906,6 +961,7 @@ export function FarmProvider({ children }) {
         category: newTx.category,
         description: newTx.description,
         date: txDate,
+        companyName: txCompany?.name,
       }).catch((err) => console.error('Erro ao enviar log para o Discord:', err));
     }
 
@@ -961,14 +1017,17 @@ export function FarmProvider({ children }) {
     });
 
     // Automatic Discord Webhook Log for Delivery Submission
-    if (discordSettings?.enabled && discordSettings?.autoDeliveries && discordSettings?.webhookUrl) {
-      sendDeliverySubmittedDiscordLog(discordSettings.webhookUrl, {
+    const delivCompany = companies.find((c) => c.id === activeCompId) || currentCompany;
+    const delivDiscord = getCompanyDiscordSettings(activeCompId);
+    if (delivDiscord?.enabled && delivDiscord?.autoDeliveries && delivDiscord?.webhookUrl) {
+      sendDeliverySubmittedDiscordLog(delivDiscord.webhookUrl, {
         memberName: currentUser?.name || 'Membro',
         managerName: manager?.name || 'Gerente',
         quantity: qty,
         itemType: newDelivery.itemType,
         notes,
         goalTitle: newDelivery.goalTitle,
+        companyName: delivCompany?.name,
       }).catch((err) => console.error('Erro ao enviar log para o Discord:', err));
     }
 
@@ -990,23 +1049,23 @@ export function FarmProvider({ children }) {
               ...d,
               status: 'confirmed',
               confirmedAt,
-              confirmedBy: currentUser.name,
+              confirmedBy: currentUser?.name || 'Gerência',
             }
           : d
       )
     );
 
-    // 2. Update goal progress
+    // 2. Automatically update connected goal progress if exists
     let updatedGoal = null;
     if (delivery.goalId) {
       setGoals((prev) =>
         prev.map((g) => {
           if (g.id === delivery.goalId) {
-            const newTotal = Number(g.currentAmount) + qty;
-            const isCompleted = newTotal >= g.targetAmount;
+            const newCurrent = Number(g.currentAmount || 0) + qty;
+            const isCompleted = newCurrent >= Number(g.targetAmount);
             updatedGoal = {
               ...g,
-              currentAmount: newTotal,
+              currentAmount: newCurrent,
               status: isCompleted ? 'completed' : g.status,
             };
             return updatedGoal;
@@ -1042,8 +1101,11 @@ export function FarmProvider({ children }) {
     });
 
     // Automatic Discord Webhook Log for Delivery Confirmation
-    if (discordSettings?.enabled && discordSettings?.autoDeliveries && discordSettings?.webhookUrl) {
-      sendDeliveryConfirmedDiscordLog(discordSettings.webhookUrl, {
+    const confCompId = delivery.companyId || currentCompanyId;
+    const confCompany = companies.find((c) => c.id === confCompId) || currentCompany;
+    const confDiscord = getCompanyDiscordSettings(confCompId);
+    if (confDiscord?.enabled && confDiscord?.autoDeliveries && confDiscord?.webhookUrl) {
+      sendDeliveryConfirmedDiscordLog(confDiscord.webhookUrl, {
         memberName: delivery.memberName,
         managerName: currentUser?.name || 'Gerência',
         quantity: qty,
@@ -1052,6 +1114,7 @@ export function FarmProvider({ children }) {
         targetTotal: updatedGoal ? updatedGoal.targetAmount : null,
         goalTitle: delivery.goalTitle,
         unitLabel: delivery.itemType,
+        companyName: confCompany?.name,
       }).catch((err) => console.error('Erro ao enviar confirmação para o Discord:', err));
     }
 
@@ -1221,9 +1284,13 @@ export function FarmProvider({ children }) {
     );
   };
 
-  const closeFinancialCycle = ({ title, periodNote }) => {
+  const closeFinancialCycle = ({ title, periodNote, companyId } = {}) => {
+    const cycleCompId = companyId || currentCompanyId || 'comp-fazenda';
+    const cycleCompany = companies.find((c) => c.id === cycleCompId) || currentCompany;
+
     const cycleRecord = {
       id: `cycle-${Date.now()}`,
+      companyId: cycleCompId,
       title: title || `Fechamento ${new Date().toLocaleDateString('pt-BR')}`,
       date: new Date().toISOString(),
       periodNote: periodNote || '',
@@ -1254,8 +1321,9 @@ export function FarmProvider({ children }) {
     }
 
     // Automatic Discord Webhook Log for Payroll / Financial Cycle Closure
-    if (discordSettings?.enabled && discordSettings?.autoPayroll && discordSettings?.webhookUrl) {
-      sendPayrollDiscordLog(discordSettings.webhookUrl, {
+    const cycleDiscord = getCompanyDiscordSettings(cycleCompId);
+    if (cycleDiscord?.enabled && cycleDiscord?.autoPayroll && cycleDiscord?.webhookUrl) {
+      sendPayrollDiscordLog(cycleDiscord.webhookUrl, {
         totalIncome,
         totalExpense,
         netProfit,
@@ -1265,14 +1333,40 @@ export function FarmProvider({ children }) {
         splitSettings,
         payouts: cycleRecord.payouts,
         closedBy: currentUser?.name || 'Liderança',
+        companyName: cycleCompany?.name,
       }).catch((err) => console.error('Erro ao enviar log de repasses para o Discord:', err));
     }
 
     return cycleRecord;
   };
 
-  const updateDiscordSettings = async (newSettings) => {
-    const merged = { ...discordSettings, ...newSettings };
+  const updateDiscordSettings = async (newSettings, targetCompanyId) => {
+    const cId = targetCompanyId || currentCompanyId || 'comp-fazenda';
+    const existingComp = discordSettings?.byCompany?.[cId] || {};
+    const updatedComp = {
+      ...existingComp,
+      ...newSettings,
+    };
+
+    const updatedByCompany = {
+      ...(discordSettings?.byCompany || {}),
+      [cId]: updatedComp,
+    };
+
+    const merged = {
+      ...discordSettings,
+      byCompany: updatedByCompany,
+    };
+
+    // If updating Fazenda or if root webhookUrl is empty, sync top-level
+    if (cId === 'comp-fazenda' || !merged.webhookUrl) {
+      merged.webhookUrl = updatedComp.webhookUrl || merged.webhookUrl;
+      merged.enabled = updatedComp.enabled ?? merged.enabled;
+      merged.autoCashflow = updatedComp.autoCashflow ?? merged.autoCashflow;
+      merged.autoDeliveries = updatedComp.autoDeliveries ?? merged.autoDeliveries;
+      merged.autoPayroll = updatedComp.autoPayroll ?? merged.autoPayroll;
+    }
+
     setDiscordSettings(merged);
     localStorage.setItem(STORAGE_KEYS.DISCORD, JSON.stringify(merged));
     if (supabase) {
@@ -1327,12 +1421,14 @@ export function FarmProvider({ children }) {
       }).then();
     }
 
-    if (discordSettings?.enabled && discordSettings?.webhookUrl) {
-      const company = companies.find((c) => c.id === route.companyId) || currentCompany;
-      sendRouteStartedDiscordLog(discordSettings.webhookUrl, {
+    const startRouteCompId = route.companyId || currentCompanyId;
+    const startRouteCompany = companies.find((c) => c.id === startRouteCompId) || currentCompany;
+    const startRouteDiscord = getCompanyDiscordSettings(startRouteCompId);
+    if (startRouteDiscord?.enabled && startRouteDiscord?.webhookUrl) {
+      sendRouteStartedDiscordLog(startRouteDiscord.webhookUrl, {
         route,
         startedBy,
-        companyName: company?.name,
+        companyName: startRouteCompany?.name,
       }).catch((e) => console.error('Erro ao enviar log de rota para Discord:', e));
     }
   };
@@ -1400,14 +1496,18 @@ export function FarmProvider({ children }) {
       }).then();
     }
 
-    if (discordSettings?.enabled && discordSettings?.webhookUrl && targetRoute) {
-      const company = companies.find((c) => c.id === targetRoute.companyId) || currentCompany;
-      sendRouteProgressDiscordLog(discordSettings.webhookUrl, {
-        route: targetRoute,
-        item: updatedItem,
-        updatedBy: currentUser?.name || 'Membro',
-        companyName: company?.name,
-      }).catch((e) => console.error('Erro ao enviar progresso da rota para Discord:', e));
+    if (targetRoute) {
+      const progRouteCompId = targetRoute.companyId || currentCompanyId;
+      const progRouteCompany = companies.find((c) => c.id === progRouteCompId) || currentCompany;
+      const progRouteDiscord = getCompanyDiscordSettings(progRouteCompId);
+      if (progRouteDiscord?.enabled && progRouteDiscord?.webhookUrl) {
+        sendRouteProgressDiscordLog(progRouteDiscord.webhookUrl, {
+          route: targetRoute,
+          item: updatedItem,
+          updatedBy: currentUser?.name || 'Membro',
+          companyName: progRouteCompany?.name,
+        }).catch((e) => console.error('Erro ao enviar progresso da rota para Discord:', e));
+      }
     }
   };
 
@@ -1454,12 +1554,14 @@ export function FarmProvider({ children }) {
       });
     }
 
-    if (discordSettings?.enabled && discordSettings?.webhookUrl) {
-      const company = companies.find((c) => c.id === route.companyId) || currentCompany;
-      sendRouteCompletedDiscordLog(discordSettings.webhookUrl, {
+    const compRouteCompId = route.companyId || currentCompanyId;
+    const compRouteCompany = companies.find((c) => c.id === compRouteCompId) || currentCompany;
+    const compRouteDiscord = getCompanyDiscordSettings(compRouteCompId);
+    if (compRouteDiscord?.enabled && compRouteDiscord?.webhookUrl) {
+      sendRouteCompletedDiscordLog(compRouteDiscord.webhookUrl, {
         route: updatedRoute,
         completedBy,
-        companyName: company?.name,
+        companyName: compRouteCompany?.name,
         creditedToBox: creditToBox && route.rewardAmount > 0,
       }).catch((e) => console.error('Erro ao enviar conclusão da rota para Discord:', e));
     }
@@ -1527,12 +1629,14 @@ export function FarmProvider({ children }) {
       }).then();
     }
 
-    if (discordSettings?.enabled && discordSettings?.webhookUrl) {
-      const company = companies.find((c) => c.id === routeObj.companyId) || currentCompany;
-      sendRouteStartedDiscordLog(discordSettings.webhookUrl, {
+    const addRouteCompId = routeObj.companyId || currentCompanyId;
+    const addRouteCompany = companies.find((c) => c.id === addRouteCompId) || currentCompany;
+    const addRouteDiscord = getCompanyDiscordSettings(addRouteCompId);
+    if (addRouteDiscord?.enabled && addRouteDiscord?.webhookUrl) {
+      sendRouteStartedDiscordLog(addRouteDiscord.webhookUrl, {
         route: routeObj,
         startedBy: currentUser?.name || 'Membro',
-        companyName: company?.name,
+        companyName: addRouteCompany?.name,
       }).catch((e) => console.error(e));
     }
 
@@ -1635,7 +1739,9 @@ export function FarmProvider({ children }) {
         resetRoute,
         addCustomRoute,
         // Discord Webhook Integration
-        discordSettings,
+        discordSettings: getCompanyDiscordSettings(currentCompanyId),
+        allDiscordSettings: discordSettings,
+        getCompanyDiscordSettings,
         updateDiscordSettings,
         // Authentication & Security
         isAuthenticated,

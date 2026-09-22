@@ -45,21 +45,21 @@ export async function sendDiscordPayload(webhookUrl, payload) {
 /**
  * Test Webhook with a test message
  */
-export async function testDiscordWebhook(webhookUrl, senderName = 'Líder da Fazenda') {
+export async function testDiscordWebhook(webhookUrl, senderName = 'Líder', companyName = 'Fazenda Pantaneiros') {
   const payload = {
-    content: `🔔 **TESTE DE CONEXÃO • FAZENDA PANTANEIROS**`,
+    content: `🔔 **TESTE DE CONEXÃO • ${companyName.toUpperCase()}**`,
     embeds: [
       {
-        title: '🌾 Integração Discord Ativada com Sucesso!',
-        description: `O canal de logs da **Fazenda Pantaneiros (West Fox)** foi conectado ao sistema web pelo integrante **${senderName}**.\n\nA partir de agora, lançamentos no caixa, entregas de sacas e confirmações serão enviadas automaticamente para este canal!`,
+        title: `🌾 Integração Discord Ativada com Sucesso!`,
+        description: `O canal de logs exclusivo da empresa **${companyName}** foi conectado ao sistema pelo integrante **${senderName}**.\n\nA partir de agora, lançamentos de caixa, entregas de produção e missões desta empresa serão enviadas automaticamente para este canal!`,
         color: 0xc59b4c, // Cor Ouro Pantaneiros (#c59b4c)
         fields: [
+          { name: 'Empresa', value: companyName, inline: true },
           { name: 'Status', value: '✅ Conectado', inline: true },
-          { name: 'Segurança', value: '🔒 Canal Oficial', inline: true },
           { name: 'Data', value: formatFullDateBR(new Date()), inline: true },
         ],
         footer: {
-          text: 'Fazenda Pantaneiros • Correio 82 • Tradição do Campo',
+          text: `${companyName} • Canal Oficial de Logs`,
         },
         timestamp: new Date().toISOString(),
       },
@@ -80,31 +80,32 @@ export async function sendCashFlowDiscordLog(webhookUrl, {
   category = '',
   description = '',
   date = new Date(),
+  companyName = 'Fazenda Pantaneiros',
 }) {
   const isIncome = type === 'income';
   const formattedAmount = formatDols(amount);
   const formattedTotal = formatDols(totalBoxBalance);
 
-  // Exact text format that the user requested:
+  // Exact text format adapted for multi-company
   let rawText = '';
   if (isIncome) {
-    rawText += `> **ADICIONADO:** ${formattedAmount} NO CAIXA DA FAZENDA\n`;
+    rawText += `> **ADICIONADO:** ${formattedAmount} NO CAIXA • ${companyName.toUpperCase()}\n`;
     rawText += `> **QUEM ADICIONOU:** ${personName}\n`;
     if (category) rawText += `> **CATEGORIA:** ${category}\n`;
     if (description) rawText += `> **OBSERVAÇÃO:** ${description}\n`;
-    rawText += `> **TOTAL DO CAIXA DA FAZENDA:** ${formattedTotal}\n`;
+    rawText += `> **TOTAL DO CAIXA:** ${formattedTotal}\n`;
     rawText += `> **DIA:** ${new Date(date).toLocaleDateString('pt-BR')}`;
   } else {
-    rawText += `> **RETIRADO:** ${formattedAmount} DO CAIXA DA FAZENDA\n`;
+    rawText += `> **RETIRADO:** ${formattedAmount} DO CAIXA • ${companyName.toUpperCase()}\n`;
     rawText += `> **QUEM RETIROU:** ${personName}\n`;
     if (category) rawText += `> **MOTIVO/CATEGORIA:** ${category}\n`;
     if (description) rawText += `> **OBSERVAÇÃO:** ${description}\n`;
-    rawText += `> **TOTAL DO CAIXA DA FAZENDA:** ${formattedTotal}\n`;
+    rawText += `> **TOTAL DO CAIXA:** ${formattedTotal}\n`;
     rawText += `> **DIA:** ${new Date(date).toLocaleDateString('pt-BR')}`;
   }
 
   const embed = {
-    title: isIncome ? '🟢 ADIÇÃO AO CAIXA DA FAZENDA' : '🔴 RETIRADA DO CAIXA DA FAZENDA',
+    title: isIncome ? `🟢 ADIÇÃO AO CAIXA • ${companyName.toUpperCase()}` : `🔴 RETIRADA DO CAIXA • ${companyName.toUpperCase()}`,
     description: rawText,
     color: isIncome ? 0x22c55e : 0xef4444, // Green or Red
     fields: [
@@ -113,19 +114,19 @@ export async function sendCashFlowDiscordLog(webhookUrl, {
       { name: 'Saldo Total em Cofre', value: formattedTotal, inline: true },
     ],
     footer: {
-      text: 'Fazenda Pantaneiros • Fluxo de Caixa',
+      text: `${companyName} • Fluxo de Caixa`,
     },
     timestamp: new Date().toISOString(),
   };
 
   return sendDiscordPayload(webhookUrl, {
-    content: `💰 **LOG FINANCEIRO • FAZENDA PANTANEIROS**`,
+    content: `💰 **LOG FINANCEIRO • ${companyName.toUpperCase()}**`,
     embeds: [embed],
   });
 }
 
 /**
- * Send Delivery Log (Quando o membro informa a entrega de sacas)
+ * Send Delivery Log (Quando o membro informa a entrega de sacas/cargas)
  */
 export async function sendDeliverySubmittedDiscordLog(webhookUrl, {
   memberName,
@@ -134,26 +135,28 @@ export async function sendDeliverySubmittedDiscordLog(webhookUrl, {
   itemType = 'Sacas de Milho',
   notes = '',
   goalTitle = '',
+  companyName = 'Fazenda Pantaneiros',
 }) {
   const embed = {
-    title: '🌾 ENTREGA DE PRODUÇÃO REGISTRADA',
-    description: `O produtor **${memberName}** informou a entrega de **${quantity} ${itemType}** destinadas ao gerente **${managerName}**.`,
+    title: `📦 ENTREGA DE PRODUÇÃO • ${companyName.toUpperCase()}`,
+    description: `O integrante **${memberName}** informou a entrega de **${quantity} ${itemType}** destinadas ao gerente **${managerName}**.`,
     color: 0xdfb56c, // Gold
     fields: [
       { name: '📦 Quantidade', value: `${quantity} ${itemType}`, inline: true },
-      { name: '👤 Produtor', value: memberName, inline: true },
+      { name: '👤 Integrante', value: memberName, inline: true },
       { name: '👔 Gerente Destinatário', value: managerName, inline: true },
+      { name: '🏢 Empresa', value: companyName, inline: true },
       { name: '⏳ Status', value: 'Aguardando Confirmação do Gerente', inline: false },
       ...(notes ? [{ name: '📝 Local/Observações', value: notes, inline: false }] : []),
     ],
     footer: {
-      text: 'Fazenda Pantaneiros • Validação de Sacas',
+      text: `${companyName} • Validação de Produção`,
     },
     timestamp: new Date().toISOString(),
   };
 
   return sendDiscordPayload(webhookUrl, {
-    content: `📦 **NOVA REMESSA • FAZENDA PANTANEIROS**`,
+    content: `📦 **NOVA REMESSA • ${companyName.toUpperCase()}**`,
     embeds: [embed],
   });
 }
@@ -168,17 +171,19 @@ export async function sendDeliveryConfirmedDiscordLog(webhookUrl, {
   itemType = 'Sacas de Milho',
   confirmedTotal,
   targetTotal,
+  companyName = 'Fazenda Pantaneiros',
 }) {
   const percent = targetTotal > 0 ? Math.round((confirmedTotal / targetTotal) * 100) : 100;
 
   const embed = {
-    title: '✅ RECEBIMENTO CONFIRMADO PELO GERENTE',
+    title: `✅ RECEBIMENTO CONFIRMADO • ${companyName.toUpperCase()}`,
     description: `O Gerente **${managerName}** conferiu e creditou **${quantity} ${itemType}** entregues por **${memberName}**!`,
     color: 0x16a34a, // Green
     fields: [
       { name: '📦 Confirmado', value: `+${quantity} ${itemType}`, inline: true },
-      { name: '🌾 Membro Creditado', value: memberName, inline: true },
+      { name: '👤 Integrante Creditado', value: memberName, inline: true },
       { name: '👔 Gerente que Conferiu', value: managerName, inline: true },
+      { name: '🏢 Empresa', value: companyName, inline: true },
       {
         name: '🎯 Progresso da Meta',
         value: targetTotal ? `${confirmedTotal} / ${targetTotal} ${itemType} (${percent}%)` : `${confirmedTotal} ${itemType}`,
@@ -186,13 +191,13 @@ export async function sendDeliveryConfirmedDiscordLog(webhookUrl, {
       },
     ],
     footer: {
-      text: 'Fazenda Pantaneiros • Confirmação Oficial',
+      text: `${companyName} • Confirmação Oficial`,
     },
     timestamp: new Date().toISOString(),
   };
 
   return sendDiscordPayload(webhookUrl, {
-    content: `✅ **ENTREGA VALIDADA • FAZENDA PANTANEIROS**`,
+    content: `✅ **ENTREGA VALIDADA • ${companyName.toUpperCase()}**`,
     embeds: [embed],
   });
 }
@@ -210,6 +215,7 @@ export async function sendPayrollDiscordLog(webhookUrl, {
   splitSettings,
   payouts,
   closedBy,
+  companyName = 'Fazenda Pantaneiros',
 }) {
   let payoutsText = '';
   payouts.slice(0, 15).forEach((p) => {
@@ -218,26 +224,26 @@ export async function sendPayrollDiscordLog(webhookUrl, {
   });
 
   const embed = {
-    title: '🌾 FECHAMENTO DE LUCROS & REPASSES DA FAZENDA',
-    description: `Fechamento financeiro oficial realizado por **${closedBy}**.`,
+    title: `🌾 FECHAMENTO DE LUCROS & REPASSES • ${companyName.toUpperCase()}`,
+    description: `Fechamento financeiro oficial da **${companyName}** realizado por **${closedBy}**.`,
     color: 0xc59b4c,
     fields: [
       { name: '💰 Faturamento Bruto', value: formatDols(totalIncome), inline: true },
       { name: '📉 Despesas', value: formatDols(totalExpense), inline: true },
       { name: '💵 Lucro Líquido Real', value: formatDols(netProfit), inline: true },
-      { name: `🏛️ Caixa Fazenda (${splitSettings.farmReservePercent}%)`, value: formatDols(farmReserveAmount), inline: true },
+      { name: `🏛️ Caixa Reserva (${splitSettings.farmReservePercent}%)`, value: formatDols(farmReserveAmount), inline: true },
       { name: `👔 Gerência (${splitSettings.managersPercent}%)`, value: formatDols(managersPoolAmount), inline: true },
       { name: `🌾 Membros (${splitSettings.membersPercent}%)`, value: formatDols(membersPoolAmount), inline: true },
       { name: '📋 Folha de Pagamentos', value: payoutsText || 'Nenhum pagamento registrado', inline: false },
     ],
     footer: {
-      text: 'Fazenda Pantaneiros • Divisão Oficial de Lucro',
+      text: `${companyName} • Divisão Oficial de Lucro`,
     },
     timestamp: new Date().toISOString(),
   };
 
   return sendDiscordPayload(webhookUrl, {
-    content: `🌾 **FECHAMENTO OFICIAL DE LUCROS • FAZENDA PANTANEIROS**`,
+    content: `🌾 **FECHAMENTO OFICIAL DE LUCROS • ${companyName.toUpperCase()}**`,
     embeds: [embed],
   });
 }

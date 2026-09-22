@@ -10,35 +10,57 @@ import {
   ShieldCheck, 
   Bell, 
   CheckCircle2,
-  Loader2
+  Loader2,
+  Building2
 } from 'lucide-react';
 
 export function DiscordSettingsModal({ isOpen, onClose }) {
-  const { discordSettings, updateDiscordSettings, currentUser } = useFarm();
+  const { 
+    currentUser, 
+    currentCompany, 
+    currentCompanyId, 
+    companies, 
+    currentRole,
+    getCompanyDiscordSettings, 
+    updateDiscordSettings 
+  } = useFarm();
 
-  const [webhookUrl, setWebhookUrl] = useState(discordSettings?.webhookUrl || '');
-  const [enabled, setEnabled] = useState(discordSettings?.enabled ?? true);
-  const [autoCashflow, setAutoCashflow] = useState(discordSettings?.autoCashflow ?? true);
-  const [autoDeliveries, setAutoDeliveries] = useState(discordSettings?.autoDeliveries ?? true);
-  const [autoPayroll, setAutoPayroll] = useState(discordSettings?.autoPayroll ?? true);
+  const [selectedCompanyId, setSelectedCompanyId] = useState(currentCompanyId || 'comp-fazenda');
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [enabled, setEnabled] = useState(true);
+  const [autoCashflow, setAutoCashflow] = useState(true);
+  const [autoDeliveries, setAutoDeliveries] = useState(true);
+  const [autoPayroll, setAutoPayroll] = useState(true);
 
   const [testStatus, setTestStatus] = useState(null); // 'loading' | 'success' | 'error' | null
   const [testError, setTestError] = useState('');
   const [saveStatus, setSaveStatus] = useState(null); // 'saving' | 'success' | 'error' | null
 
+  // Ensure selectedCompany matches current company on modal open
   useEffect(() => {
-    if (discordSettings && isOpen) {
-      setWebhookUrl(discordSettings.webhookUrl || '');
-      setEnabled(discordSettings.enabled ?? true);
-      setAutoCashflow(discordSettings.autoCashflow ?? true);
-      setAutoDeliveries(discordSettings.autoDeliveries ?? true);
-      setAutoPayroll(discordSettings.autoPayroll ?? true);
+    if (isOpen) {
+      setSelectedCompanyId(currentCompanyId || 'comp-fazenda');
+    }
+  }, [isOpen, currentCompanyId]);
+
+  // Load target company settings whenever selected company changes
+  useEffect(() => {
+    if (isOpen && selectedCompanyId && getCompanyDiscordSettings) {
+      const settings = getCompanyDiscordSettings(selectedCompanyId);
+      setWebhookUrl(settings?.webhookUrl || '');
+      setEnabled(settings?.enabled ?? true);
+      setAutoCashflow(settings?.autoCashflow ?? true);
+      setAutoDeliveries(settings?.autoDeliveries ?? true);
+      setAutoPayroll(settings?.autoPayroll ?? true);
       setTestStatus(null);
       setSaveStatus(null);
     }
-  }, [discordSettings, isOpen]);
+  }, [selectedCompanyId, isOpen]);
 
   if (!isOpen) return null;
+
+  const targetCompany = (companies && companies.find((c) => c.id === selectedCompanyId)) || currentCompany;
+  const isMaster = currentRole === 'master';
 
   const handleTest = async () => {
     if (!webhookUrl || !webhookUrl.trim().startsWith('https://discord.com/api/webhooks/')) {
@@ -50,7 +72,11 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
     setTestStatus('loading');
     setTestError('');
 
-    const res = await testDiscordWebhook(webhookUrl.trim(), currentUser.name);
+    const res = await testDiscordWebhook(
+      webhookUrl.trim(), 
+      currentUser?.name || 'Líder', 
+      targetCompany?.name || 'Fazenda Pantaneiros'
+    );
 
     if (res.success) {
       setTestStatus('success');
@@ -72,7 +98,7 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
         autoCashflow,
         autoDeliveries,
         autoPayroll,
-      });
+      }, selectedCompanyId);
 
       setSaveStatus('success');
       setTimeout(() => {
@@ -95,8 +121,8 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
               🎮
             </div>
             <div>
-              <h3 className="text-base font-bold text-stone-900">Integração de Logs com o Discord</h3>
-              <p className="text-xs text-stone-500">Envie lançamentos de caixa e entregas direto pro canal do Discord</p>
+              <h3 className="text-base font-bold text-stone-900">Logs Automáticos no Discord</h3>
+              <p className="text-xs text-stone-500">Configuração independente por empresa do grupo</p>
             </div>
           </div>
           <button
@@ -109,13 +135,56 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
 
         <form onSubmit={handleSave} className="p-6 space-y-5">
           
+          {/* Company Selector Tabs (Master or Multi-Company) */}
+          {companies && companies.length > 1 && (
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+                Selecione a Empresa para Configurar:
+              </label>
+              <div className="flex items-center gap-1.5 p-1 bg-stone-100 rounded-2xl overflow-x-auto">
+                {companies.map((comp) => {
+                  const isSelected = comp.id === selectedCompanyId;
+                  return (
+                    <button
+                      key={comp.id}
+                      type="button"
+                      onClick={() => setSelectedCompanyId(comp.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                        isSelected
+                          ? 'bg-white text-stone-900 shadow-sm border border-stone-200/80'
+                          : 'text-stone-500 hover:text-stone-800'
+                      }`}
+                    >
+                      <span>{comp.icon || '🏢'}</span>
+                      <span>{comp.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Active Enterprise Banner */}
+          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-stone-50 border border-stone-200 text-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">{targetCompany?.icon || '🏢'}</span>
+              <div>
+                <span className="font-bold text-stone-900 block">Canal Exclusivo: {targetCompany?.name}</span>
+                <span className="text-[11px] text-stone-500">Cada empresa envia seus logs para seu próprio canal no Discord.</span>
+              </div>
+            </div>
+            <span className="px-2 py-0.5 rounded-lg bg-stone-200/70 text-stone-700 font-mono text-[10px] font-bold">
+              {targetCompany?.code || targetCompany?.segment || 'OFICIAL'}
+            </span>
+          </div>
+
           {/* Quick Guide */}
-          <div className="p-3.5 rounded-2xl bg-stone-50 border border-stone-200/80 text-xs text-stone-600 space-y-1.5">
+          <div className="p-3.5 rounded-2xl bg-[#5865F2]/5 border border-[#5865F2]/15 text-xs text-stone-600 space-y-1">
             <div className="font-bold text-stone-900 flex items-center gap-1.5">
-              <span>Como pegar o link do Webhook no seu Discord:</span>
+              <span>Como obter a URL do Webhook do Discord:</span>
             </div>
             <ol className="list-decimal list-inside space-y-1 text-stone-600 pl-1 leading-relaxed">
-              <li>No Discord, clique na engrenagem <strong>⚙️ Editar Canal</strong> do canal de logs.</li>
+              <li>No Discord da <strong>{targetCompany?.name}</strong>, clique na engrenagem <strong>⚙️ Editar Canal</strong> do canal de logs.</li>
               <li>Vá em <strong>Integrações</strong> &rarr; <strong>Webhooks</strong> &rarr; <strong>Novo Webhook</strong>.</li>
               <li>Clique em <strong>Copiar URL do Webhook</strong> e cole no campo abaixo:</li>
             </ol>
@@ -124,7 +193,7 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
           {/* Webhook URL Input */}
           <div>
             <label className="block text-xs font-semibold text-stone-700 mb-1">
-              URL do Webhook do Discord:
+              URL do Webhook do Discord ({targetCompany?.name}):
             </label>
             <input
               type="url"
@@ -148,7 +217,7 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold text-xs shadow-sm transition-all"
               >
                 <Bell className="w-3.5 h-3.5" />
-                <span>{testStatus === 'loading' ? 'Enviando teste...' : 'Enviar Mensagem de Teste'}</span>
+                <span>{testStatus === 'loading' ? 'Enviando teste...' : `Testar Webhook de ${targetCompany?.name}`}</span>
               </button>
 
               {testStatus === 'success' && (
@@ -170,7 +239,7 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
           {/* Notification Automations Checkboxes */}
           <div className="pt-3 border-t border-stone-100 space-y-2.5">
             <span className="text-xs font-bold text-stone-800 block">
-              Disparar Mensagens Automaticamente:
+              Disparar Mensagens Automaticamente para {targetCompany?.name}:
             </span>
 
             <label className="flex items-center gap-2.5 text-xs text-stone-700 cursor-pointer">
@@ -180,7 +249,7 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
                 onChange={(e) => setAutoCashflow(e.target.checked)}
                 className="rounded accent-pantanal-700 w-4 h-4"
               />
-              <span>🟢 Adições e retiradas no Caixa da Fazenda (valores em DOLS)</span>
+              <span>🟢 Adições e retiradas no Caixa de {targetCompany?.name} (DOLS)</span>
             </label>
 
             <label className="flex items-center gap-2.5 text-xs text-stone-700 cursor-pointer">
@@ -190,7 +259,7 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
                 onChange={(e) => setAutoDeliveries(e.target.checked)}
                 className="rounded accent-pantanal-700 w-4 h-4"
               />
-              <span>🌾 Entregas e confirmações de sacas de milho dos produtores</span>
+              <span>🌾 Entregas e confirmações de {targetCompany?.unitLabel || 'produção'}</span>
             </label>
 
             <label className="flex items-center gap-2.5 text-xs text-stone-700 cursor-pointer">
@@ -232,7 +301,7 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
               ) : saveStatus === 'success' ? (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Salvo no Banco de Dados!</span>
+                  <span>Salvo para {targetCompany?.name}!</span>
                 </>
               ) : saveStatus === 'error' ? (
                 <>
@@ -242,7 +311,7 @@ export function DiscordSettingsModal({ isOpen, onClose }) {
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  <span>Salvar Configuração do Discord</span>
+                  <span>Salvar Configuração ({targetCompany?.name})</span>
                 </>
               )}
             </button>
