@@ -637,6 +637,11 @@ export function FarmProvider({ children }) {
 
   const netProfit = Math.max(0, totalIncome - operationalExpense);
 
+  // Profit Split Calculation (Empresa ativa)
+  const farmReserveAmount = (netProfit * (splitSettings?.farmReservePercent || 0)) / 100;
+  const managersPoolAmount = (netProfit * (splitSettings?.managersPercent || 0)) / 100;
+  const membersPoolAmount = (netProfit * (splitSettings?.membersPercent || 0)) / 100;
+
   // Consolidated Multi-Company Metrics (Holding Master)
   const consolidatedBalance = transactions.reduce((acc, tx) => {
     return tx.type === 'income' ? acc + Number(tx.amount) : acc - Number(tx.amount);
