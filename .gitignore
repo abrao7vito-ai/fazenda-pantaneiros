@@ -28,3 +28,6 @@ dist-test
 .env.local
 .env.production
 .env.development
+**/.env
+**/.env.local
+bot/node_modules

@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "vite preview --host 0.0.0.0",
+    "bot": "node bot/index.js",
     "test": "vite build --ssr test-suite.jsx --outDir dist-test && node dist-test/test-suite.js"
   },
   "dependencies": {

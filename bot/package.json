@@ -1,0 +1,16 @@
+{
+  "name": "pantaneiros-discord-bot",
+  "version": "1.0.0",
+  "description": "Bot Interativo do Discord para Checklist de Rotas e Missões - Fazenda Pantaneiros",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.48.0",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.7"
+  }
+}
