@@ -521,7 +521,7 @@ client.on('interactionCreate', async (interaction) => {
 
             modifiedItemName = it.name;
             const current = Number(it.currentAmount || 0);
-            newTotal = current + quantityAdded;
+            newTotal = Math.min(it.targetAmount, current + quantityAdded);
             targetTotal = it.targetAmount;
             const isCompleted = newTotal >= targetTotal;
 
@@ -556,14 +556,11 @@ client.on('interactionCreate', async (interaction) => {
 
         await saveRoutesToDb(updatedRoutes);
 
-        // Atualiza o painel fixo
-        await refreshFixedPanelMessage();
+        // Fecha a janela modal silenciosamente sem notificação/mensagem na tela
+        await interaction.deferUpdate().catch(() => {});
 
-        // Responde de forma efêmera e confirma para o usuário
-        await interaction.reply({
-          content: `✅ **Sucesso!** Você carregou **+${quantityAdded} de ${modifiedItemName}**!\nTotal atual: **${newTotal}/${targetTotal}** ${newTotal >= targetTotal ? '🎉 *(100% Completo!)*' : ''}`,
-          ephemeral: true,
-        });
+        // Atualiza o painel fixo no canal instantaneamente
+        await refreshFixedPanelMessage();
 
         return;
       }
