@@ -366,6 +366,28 @@ export function RouteChecklistManager() {
                     </div>
                   </div>
 
+                  {/* Histórico Recente de Carregamentos */}
+                  {route.logs && route.logs.length > 0 && (
+                    <div className="mt-4 p-3 rounded-2xl bg-stone-900/80 border border-stone-800/90 text-xs">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1.5 flex items-center gap-1.5">
+                        <Clock className="w-3 h-3 text-amber-400" />
+                        <span>Histórico de Carregamento (Discord & Web):</span>
+                      </div>
+                      <div className="space-y-1 max-h-24 overflow-y-auto font-mono text-[11px]">
+                        {route.logs.slice(0, 4).map((log) => (
+                          <div key={log.id} className="text-stone-300 flex items-center justify-between">
+                            <span>
+                              <strong className="text-amber-300">{log.userName}</strong> carregou <strong className="text-emerald-400">+{log.amount}</strong> de {log.itemName}
+                            </span>
+                            <span className="text-[9px] text-stone-500">
+                              {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                 </div>
 
                 {/* Card Footer Actions */}

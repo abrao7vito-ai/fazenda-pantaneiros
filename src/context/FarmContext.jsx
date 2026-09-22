@@ -1366,9 +1366,22 @@ export function FarmProvider({ children }) {
         return updatedItem;
       });
 
+      // Registra no histórico de logs da rota
+      const diffAmount = addQuantity != null ? Number(addQuantity) : (updatedItem?.currentAmount - (r.items.find(x => x.id === itemId)?.currentAmount || 0));
+      const newLog = {
+        id: `log-${Date.now()}`,
+        userName: currentUser?.name || 'Membro',
+        itemName: updatedItem?.name || 'Item',
+        amount: diffAmount > 0 ? diffAmount : 1,
+        timestamp: new Date().toISOString(),
+      };
+      const updatedLogs = [newLog, ...(r.logs || [])].slice(0, 10);
+
       targetRoute = {
         ...r,
+        status: 'in_progress',
         items: newItems,
+        logs: updatedLogs,
       };
       return targetRoute;
     });
