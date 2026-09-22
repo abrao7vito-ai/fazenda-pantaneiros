@@ -4,7 +4,7 @@ import { formatDols, generateReportMessage } from '../../utils/formatters';
 import { X, Plus, Minus, Copy, Check, Sparkles, Send } from 'lucide-react';
 
 export function TransactionFormModal({ isOpen, onClose }) {
-  const { members, currentUser, totalBalance, addTransaction } = useFarm();
+  const { members, currentUser, totalBalance, addTransaction, currentCompany } = useFarm();
 
   const [type, setType] = useState('income');
   const [amount, setAmount] = useState('');
@@ -71,13 +71,13 @@ export function TransactionFormModal({ isOpen, onClose }) {
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100 bg-[#fbfaf6]">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-amber-100 text-amber-800">
-              <Sparkles className="w-5 h-5" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-lg">
+              {currentCompany?.icon || '💰'}
             </div>
             <div>
-              <h3 className="text-base font-bold text-stone-900">Lançar no Caixa da Fazenda</h3>
-              <p className="text-xs text-stone-500">Gera o relatório padrão pronto para copiar</p>
+              <h3 className="text-base font-bold text-stone-900">Lançar no Caixa • {currentCompany?.name}</h3>
+              <p className="text-xs text-stone-500">Lançamento de {currentCompany?.segment}</p>
             </div>
           </div>
           <button
@@ -97,7 +97,7 @@ export function TransactionFormModal({ isOpen, onClose }) {
               </div>
               <h4 className="text-lg font-bold text-stone-900">Lançamento Efetuado com Sucesso!</h4>
               <p className="text-xs text-stone-600 mt-1">
-                O caixa da fazenda foi atualizado para <strong className="text-emerald-700 font-bold">{formatDols(simulatedTotal)}</strong>.
+                O caixa de <strong>{currentCompany?.name}</strong> foi atualizado para <strong className="text-emerald-700 font-bold">{formatDols(simulatedTotal)}</strong>.
               </p>
             </div>
 

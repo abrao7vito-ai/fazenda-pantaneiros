@@ -1,6 +1,7 @@
 import React from 'react';
 import { useFarm } from '../../context/FarmContext';
 import { formatDols } from '../../utils/formatters';
+import { CompanySwitcher } from '../Company/CompanySwitcher';
 import { 
   LayoutDashboard, 
   Target, 
@@ -12,9 +13,9 @@ import {
   Wheat, 
   Lock, 
   LogOut, 
-  Clock,
-  Key,
-  ShieldCheck,
+  Clock, 
+  Key, 
+  ShieldCheck, 
   Database,
   Building2
 } from 'lucide-react';
@@ -27,17 +28,17 @@ export function Sidebar({
   onOpenDiscordSettings,
   onOpenEditProfile,
   onOpenDatabaseSettings,
+  onOpenCreateCompany,
 }) {
   const { 
     totalBalance, 
     currentUser, 
     currentRole, 
     members, 
-    myPendingDeliveries,
+    myPendingDeliveries, 
     logout,
     minutesRemaining,
-    discordSettings,
-    dbStatus,
+    currentCompany,
   } = useFarm();
 
   const isLeader = currentRole === 'owner';
@@ -65,13 +66,13 @@ export function Sidebar({
 
   const roleBadge = getRoleBadge(currentRole);
 
-  // Nav items: Empresa (Lucros, Contas, Conexões) é APENAS visível para o Dono
+  // Nav items: Empresa (Holding, Lucros, Contas) é APENAS visível para o Dono
   const navItems = [
     {
       id: 'goals',
       label: 'Metas & Entregas',
-      subtitle: 'Sacas de Milho & Confirmação',
-      icon: Wheat,
+      subtitle: `${currentCompany?.unitLabel || 'Produção'} & Validação`,
+      icon: Target,
       badge: pendingCount > 0 ? `${pendingCount} Pendente` : null,
       badgeColor: 'bg-amber-100 text-amber-800 border-amber-300 animate-pulse',
     },
@@ -87,7 +88,7 @@ export function Sidebar({
           {
             id: 'company',
             label: 'Painel da Empresa',
-            subtitle: 'Lucros, Contas & Conexões',
+            subtitle: 'Holding Master, Lucros & Equipe',
             icon: Building2,
             badge: '👑 Dono',
             badgeColor: 'bg-amber-50 text-amber-800 border-amber-300',
@@ -101,51 +102,56 @@ export function Sidebar({
       
       {/* Top Branding Section with Official Logo */}
       <div>
-        <div className="p-5 border-b border-stone-200/80 bg-[#fbfaf6]">
-          <div className="flex items-center gap-3.5">
+        <div className="p-4 border-b border-stone-200/80 bg-[#fbfaf6]">
+          <div className="flex items-center gap-3">
             <div className="relative">
               <img
                 src="/logo_pantaneiros.jpg"
                 alt="Logo Fazenda Pantaneiros"
-                className="w-13 h-13 rounded-2xl object-cover ring-2 ring-ouro-500/30 shadow-md border border-stone-200"
+                className="w-11 h-11 rounded-2xl object-cover ring-2 ring-ouro-500/30 shadow-md border border-stone-200"
               />
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 ring-2 ring-white flex items-center justify-center">
+              <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white flex items-center justify-center">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
               </div>
             </div>
             <div>
-              <h1 className="text-base font-extrabold tracking-wider text-stone-900 uppercase">
+              <h1 className="text-sm font-extrabold tracking-wider text-stone-900 uppercase">
                 Pantaneiros
               </h1>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[10px] font-bold text-pantanal-700 uppercase tracking-widest px-1.5 py-0.2 rounded bg-pantanal-100/80 border border-pantanal-200">
+                <span className="text-[9px] font-bold text-pantanal-700 uppercase tracking-widest px-1.5 py-0.2 rounded bg-pantanal-100/80 border border-pantanal-200">
                   WEST FOX
                 </span>
-                <span className="text-[10px] text-stone-500 font-medium">Correio 82</span>
+                <span className="text-[10px] text-stone-400 font-mono">Correio 82</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Live Farm Box Clean Card */}
-        <div className="p-4 mx-3 mt-4 rounded-2xl bg-[#f8f6f0] border border-ouro-500/30 shadow-card">
+        {/* Global Multi-Company Switcher */}
+        <div className="px-3 pt-3">
+          <CompanySwitcher onOpenCreateCompany={onOpenCreateCompany} />
+        </div>
+
+        {/* Live Active Company Box Clean Card */}
+        <div className="p-4 mx-3 mt-3 rounded-2xl bg-[#f8f6f0] border border-ouro-500/30 shadow-card">
           <div className="flex items-center justify-between text-[10px] uppercase font-bold text-stone-500 tracking-wider">
-            <span className="flex items-center gap-1.5 text-stone-700">
-              <TrendingUp className="w-3.5 h-3.5 text-pantanal-600" />
-              <span>Caixa da Fazenda</span>
+            <span className="flex items-center gap-1.5 text-stone-700 truncate">
+              <TrendingUp className="w-3.5 h-3.5 text-pantanal-600 shrink-0" />
+              <span className="truncate">Caixa {currentCompany?.name?.split(' ')[0]}</span>
             </span>
-            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px] font-semibold">
-              Disponível
+            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px] font-semibold shrink-0">
+              Ativo
             </span>
           </div>
           <div className="text-xl font-mono font-extrabold text-stone-900 mt-1.5">
             {formatDols(totalBalance)}
           </div>
           <div className="text-[10px] text-stone-500 mt-1 flex items-center justify-between">
-            <span>Saldo Atual da Fazenda</span>
+            <span className="truncate">Saldo em Caixa</span>
             <button
               onClick={onOpenNewTransaction}
-              className="text-[10px] text-ouro-600 hover:text-ouro-700 font-bold flex items-center gap-0.5 underline decoration-ouro-500/40"
+              className="text-[10px] text-ouro-600 hover:text-ouro-700 font-bold flex items-center gap-0.5 underline decoration-ouro-500/40 shrink-0"
             >
               + Lançar
             </button>
@@ -156,7 +162,7 @@ export function Sidebar({
         <div className="px-3 mt-3 grid grid-cols-2 gap-2">
           <button
             onClick={onOpenNewTransaction}
-            className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-pantanal-700 hover:bg-pantanal-800 text-white font-bold text-xs shadow-sm transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+            className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-pantanal-700 hover:bg-pantanal-800 text-white font-bold text-xs shadow-sm transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
           >
             <PlusCircle className="w-3.5 h-3.5" />
             <span>Lançar DOLS</span>
@@ -164,15 +170,16 @@ export function Sidebar({
 
           <button
             onClick={onOpenSubmitDelivery}
-            className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-[#6d3f23] hover:bg-[#54301b] text-white font-bold text-xs shadow-sm transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+            className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-[#6d3f23] hover:bg-[#54301b] text-white font-bold text-xs shadow-sm transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer truncate"
+            title={`Registrar entrega de ${currentCompany?.unitLabel}`}
           >
-            <Wheat className="w-3.5 h-3.5 text-ouro-300" />
-            <span>Entregar Sacas</span>
+            <span className="text-xs">{currentCompany?.icon || '🌾'}</span>
+            <span className="truncate">Entregar</span>
           </button>
         </div>
 
         {/* Navigation Links */}
-        <nav className="p-3 space-y-1 mt-3">
+        <nav className="p-3 space-y-1 mt-2">
           <div className="px-3 pb-1 text-[10px] font-mono uppercase tracking-wider text-stone-400 font-semibold">
             Navegação Principal
           </div>

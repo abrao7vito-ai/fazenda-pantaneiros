@@ -4,7 +4,7 @@ import { generateDeliverySubmissionDiscordMessage } from '../../utils/formatters
 import { X, Wheat, Send, Copy, Check } from 'lucide-react';
 
 export function SubmitDeliveryModal({ isOpen, onClose, preselectedGoalId = null }) {
-  const { members, currentUser, goals, submitDelivery } = useFarm();
+  const { members, currentUser, goals, submitDelivery, currentCompany } = useFarm();
 
   const [goalId, setGoalId] = useState(preselectedGoalId || '');
   const [managerId, setManagerId] = useState('');
@@ -38,7 +38,7 @@ export function SubmitDeliveryModal({ isOpen, onClose, preselectedGoalId = null 
 
   const selectedGoal = goals.find((g) => g.id === goalId);
   const selectedManager = members.find((m) => m.id === managerId);
-  const itemType = selectedGoal?.unitLabel || 'Sacas de Milho';
+  const itemType = selectedGoal?.unitLabel || currentCompany?.unitLabel || 'Sacas de Milho';
   const numQty = parseFloat(quantity) || 0;
 
   const livePreview = generateDeliverySubmissionDiscordMessage({

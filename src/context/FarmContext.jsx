@@ -5,6 +5,7 @@ import {
   INITIAL_GOALS,
   INITIAL_DELIVERIES,
   INITIAL_SPLIT_SETTINGS,
+  INITIAL_COMPANIES,
 } from '../utils/initialData';
 import { 
   generateReportMessage, 
@@ -43,6 +44,8 @@ const STORAGE_KEYS = {
   CURRENT_USER: 'pantaneiros_team_user_v1',
   CYCLES: 'pantaneiros_team_cycles_v1',
   DISCORD: 'pantaneiros_team_discord_v1',
+  COMPANIES: 'pantaneiros_companies_v2',
+  ACTIVE_COMPANY: 'pantaneiros_active_company_v2',
 };
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutos em milissegundos
@@ -84,6 +87,16 @@ export function FarmProvider({ children }) {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [companies, setCompanies] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.COMPANIES);
+    return saved ? JSON.parse(saved) : INITIAL_COMPANIES;
+  });
+
+  const [currentCompanyId, setCurrentCompanyId] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_COMPANY);
+    return saved || 'comp-fazenda';
+  });
+
   const [discordSettings, setDiscordSettings] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.DISCORD);
     return saved
@@ -108,6 +121,14 @@ export function FarmProvider({ children }) {
   const [minutesRemaining, setMinutesRemaining] = useState(15);
 
   // --- Sync with LocalStorage ---
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.COMPANIES, JSON.stringify(companies));
+  }, [companies]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_COMPANY, currentCompanyId);
+  }, [currentCompanyId]);
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.MEMBERS, JSON.stringify(members));
   }, [members]);
@@ -212,6 +233,9 @@ export function FarmProvider({ children }) {
       if (settingsData) {
         settingsData.forEach((row) => {
           if (row.key === 'split' && row.value) setSplitSettings(row.value);
+          if (row.key === 'companies' && Array.isArray(row.value) && row.value.length > 0) {
+            setCompanies(row.value);
+          }
           if (row.key === 'discord' && row.value) {
             setDiscordSettings((prev) => {
               if (row.value?.webhookUrl) {
@@ -302,6 +326,7 @@ export function FarmProvider({ children }) {
         if (payload.new) {
           if (payload.new.key === 'split' && payload.new.value) setSplitSettings(payload.new.value);
           if (payload.new.key === 'discord' && payload.new.value) setDiscordSettings(payload.new.value);
+          if (payload.new.key === 'companies' && Array.isArray(payload.new.value)) setCompanies(payload.new.value);
         }
       })
       .subscribe();
@@ -399,26 +424,147 @@ export function FarmProvider({ children }) {
     };
   }, [isAuthenticated]);
 
-  // --- Financial Calculations ---
-  const totalIncome = transactions
+  // --- Multi-Company Engine (Fazenda, Ferrovia, Taverna & Custom) ---
+  const currentCompany =
+    companies.find((c) => c.id === currentCompanyId) || companies[0] || INITIAL_COMPANIES[0];
+
+  const selectCompany = (companyId) => {
+    if (companies.some((c) => c.id === companyId)) {
+      setCurrentCompanyId(companyId);
+    }
+  };
+
+  const addCompany = ({ name, segment, icon, unitLabel, code, initialBalance = 0, description = '' }) => {
+    const newId = `comp-${Date.now()}`;
+    const newComp = {
+      id: newId,
+      name: name.trim(),
+      type: 'general',
+      code: code ? code.trim().toUpperCase() : `EMP • ${companies.length + 1}`,
+      segment: segment ? segment.trim() : 'Atividade Comercial',
+      icon: icon || '🏢',
+      unitLabel: unitLabel ? unitLabel.trim() : 'Unidades',
+      themeColor: 'amber',
+      description: description ? description.trim() : '',
+      createdAt: new Date().toISOString(),
+    };
+
+    const updated = [...companies, newComp];
+    setCompanies(updated);
+
+    const initNum = parseFloat(initialBalance);
+    if (initNum && initNum > 0) {
+      const initialTx = {
+        id: `tx-init-${Date.now()}`,
+        companyId: newId,
+        type: 'income',
+        amount: initNum,
+        memberId: currentUser?.id || 'mem-raquel',
+        memberName: currentUser?.name || 'Dono',
+        category: 'Abertura de Caixa',
+        description: `Saldo inicial de abertura da empresa ${newComp.name}`,
+        date: new Date().toISOString(),
+        boxBalanceAfter: initNum,
+      };
+      setTransactions((prev) => [initialTx, ...prev]);
+      if (supabase) {
+        supabase.from('transactions').insert(toDbTransaction(initialTx)).then();
+      }
+    }
+
+    if (supabase) {
+      supabase.from('farm_settings').upsert({
+        key: 'companies',
+        value: updated,
+        updated_at: new Date().toISOString(),
+      }).then();
+    }
+
+    setCurrentCompanyId(newId);
+    return newComp;
+  };
+
+  const updateCompany = (companyId, updates) => {
+    const updated = companies.map((c) => (c.id === companyId ? { ...c, ...updates } : c));
+    setCompanies(updated);
+    if (supabase) {
+      supabase.from('farm_settings').upsert({
+        key: 'companies',
+        value: updated,
+        updated_at: new Date().toISOString(),
+      }).then();
+    }
+  };
+
+  const deleteCompany = (companyId) => {
+    if (companyId === 'comp-fazenda') {
+      alert('A Fazenda Pantaneiros é a matriz principal e não pode ser excluída.');
+      return false;
+    }
+    const updated = companies.filter((c) => c.id !== companyId);
+    setCompanies(updated);
+    if (currentCompanyId === companyId) {
+      setCurrentCompanyId('comp-fazenda');
+    }
+    if (supabase) {
+      supabase.from('farm_settings').upsert({
+        key: 'companies',
+        value: updated,
+        updated_at: new Date().toISOString(),
+      }).then();
+    }
+    return true;
+  };
+
+  // Scoped Data by Active Company
+  const activeTransactions = transactions.filter(
+    (tx) => (tx.companyId || 'comp-fazenda') === currentCompanyId
+  );
+
+  const activeGoals = goals.filter(
+    (g) => (g.companyId || 'comp-fazenda') === currentCompanyId
+  );
+
+  const activeDeliveries = deliveries.filter(
+    (d) => (d.companyId || 'comp-fazenda') === currentCompanyId
+  );
+
+  // Financial Calculations for Active Company
+  const totalIncome = activeTransactions
     .filter((tx) => tx.type === 'income')
     .reduce((sum, tx) => sum + Number(tx.amount), 0);
 
-  const totalExpense = transactions
+  const totalExpense = activeTransactions
     .filter((tx) => tx.type === 'expense')
     .reduce((sum, tx) => sum + Number(tx.amount), 0);
 
   const totalBalance = totalIncome - totalExpense;
 
-  // Despesas operacionais puras (insumos, maquinário), excluindo saques de folha de pagamento já realizados
-  const operationalExpense = transactions
+  // Despesas operacionais puras da empresa ativa
+  const operationalExpense = activeTransactions
     .filter((tx) => tx.type === 'expense' && tx.category !== 'Folha de Pagamento' && tx.category !== 'Retirada de Lucro')
     .reduce((sum, tx) => sum + Number(tx.amount), 0);
 
-  // Lucro operacional repartível da produção
   const netProfit = Math.max(0, totalIncome - operationalExpense);
 
-  // Profit Split Calculation
+  // Consolidated Multi-Company Metrics (Holding Master)
+  const consolidatedBalance = transactions.reduce((acc, tx) => {
+    return tx.type === 'income' ? acc + Number(tx.amount) : acc - Number(tx.amount);
+  }, 0);
+
+  const consolidatedIncome = transactions
+    .filter((tx) => tx.type === 'income')
+    .reduce((acc, tx) => acc + Number(tx.amount), 0);
+
+  const companyBalances = {};
+  companies.forEach((c) => {
+    const compTxs = transactions.filter((tx) => (tx.companyId || 'comp-fazenda') === c.id);
+    const inc = compTxs.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+    const exp = compTxs.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+    companyBalances[c.id] = inc - exp;
+  });
+
+  // Profit Split Calculation (Empresa ativa)
   const farmReserveAmount = (netProfit * (splitSettings.farmReservePercent || 0)) / 100;
   const managersPoolAmount = (netProfit * (splitSettings.managersPercent || 0)) / 100;
   const membersPoolAmount = (netProfit * (splitSettings.membersPercent || 0)) / 100;
@@ -436,7 +582,7 @@ export function FarmProvider({ children }) {
     };
   });
 
-  transactions.forEach((tx) => {
+  activeTransactions.forEach((tx) => {
     if (memberContributions[tx.memberId]) {
       if (tx.type === 'income') {
         memberContributions[tx.memberId].totalIncomeAdded += Number(tx.amount);
@@ -446,7 +592,7 @@ export function FarmProvider({ children }) {
     }
   });
 
-  deliveries
+  activeDeliveries
     .filter((d) => d.status === 'confirmed')
     .forEach((d) => {
       if (memberContributions[d.memberId]) {
@@ -454,7 +600,7 @@ export function FarmProvider({ children }) {
       }
     });
 
-  goals.forEach((g) => {
+  activeGoals.forEach((g) => {
     if (memberContributions[g.targetMemberId]) {
       memberContributions[g.targetMemberId].goalsAssigned.push(g);
       if (g.status === 'completed' || (g.currentAmount >= g.targetAmount && g.targetAmount > 0)) {
@@ -503,8 +649,8 @@ export function FarmProvider({ children }) {
   });
 
   // Pending deliveries count for managers and owner
-  const pendingDeliveries = deliveries.filter((d) => d.status === 'pending');
-  const myPendingDeliveries = deliveries.filter((d) => {
+  const pendingDeliveries = activeDeliveries.filter((d) => d.status === 'pending');
+  const myPendingDeliveries = activeDeliveries.filter((d) => {
     if (d.status !== 'pending') return false;
     if (currentRole === 'owner') return true; // Owner can validate all
     return d.managerId === currentUser.id;
@@ -512,15 +658,18 @@ export function FarmProvider({ children }) {
 
   // --- Actions ---
 
-  const addTransaction = ({ type, amount, memberId, category, description, date }) => {
+  const addTransaction = ({ type, amount, memberId, category, description, date, companyId }) => {
     const numAmount = Number(amount);
     const member = members.find((m) => m.id === memberId) || currentUser;
     const txDate = date || new Date().toISOString();
+    const activeCompId = companyId || currentCompanyId || 'comp-fazenda';
 
-    const newBalance = type === 'income' ? totalBalance + numAmount : totalBalance - numAmount;
+    const compCurrentBalance = companyBalances[activeCompId] != null ? companyBalances[activeCompId] : totalBalance;
+    const newBalance = type === 'income' ? compCurrentBalance + numAmount : compCurrentBalance - numAmount;
 
     const newTx = {
       id: `tx-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      companyId: activeCompId,
       type,
       amount: numAmount,
       memberId: member.id,
@@ -600,20 +749,22 @@ export function FarmProvider({ children }) {
   };
 
   // Deliveries Workflow (Member informs, Manager confirms)
-  const submitDelivery = ({ goalId, quantity, managerId, notes }) => {
+  const submitDelivery = ({ goalId, quantity, managerId, notes, companyId }) => {
     const qty = Number(quantity);
+    const activeCompId = companyId || currentCompanyId || 'comp-fazenda';
     const goal = goals.find((g) => g.id === goalId);
     const manager = members.find((m) => m.id === managerId) || members.find((m) => m.role === 'manager');
 
     const newDelivery = {
       id: `deliv-${Date.now()}`,
+      companyId: activeCompId,
       goalId: goal?.id || null,
-      goalTitle: goal?.title || 'Entrega Avulsa de Sacas de Milho',
+      goalTitle: goal?.title || `Entrega Avulsa de ${currentCompany.unitLabel}`,
       memberId: currentUser.id,
       memberName: currentUser.name,
       managerId: manager?.id || '',
       managerName: manager?.name || 'Gerente',
-      itemType: goal?.unitLabel || 'Sacas de Milho',
+      itemType: goal?.unitLabel || currentCompany.unitLabel,
       quantity: qty,
       status: 'pending',
       submittedAt: new Date().toISOString(),
@@ -760,15 +911,17 @@ export function FarmProvider({ children }) {
     }
   };
 
-  const addGoal = ({ title, type, unitType, unitLabel, targetMemberId, targetAmount, deadline, notes }) => {
+  const addGoal = ({ title, type, unitType, unitLabel, targetMemberId, targetAmount, deadline, notes, companyId }) => {
     const isAll = targetMemberId === 'all';
+    const activeCompId = companyId || currentCompanyId || 'comp-fazenda';
     const targetMember = isAll ? null : members.find((m) => m.id === targetMemberId);
     const newGoal = {
       id: `goal-${Date.now()}`,
+      companyId: activeCompId,
       title,
       type: type || (currentRole === 'owner' ? 'owner_to_manager' : 'manager_to_member'),
       unitType: unitType || 'sacks', // 'sacks' | 'dols'
-      unitLabel: unitLabel || (unitType === 'dols' ? 'DOLS' : 'Sacas de Milho'),
+      unitLabel: unitLabel || (unitType === 'dols' ? 'DOLS' : currentCompany.unitLabel),
       creatorRole: currentRole,
       creatorName: currentUser.name,
       targetMemberId: targetMemberId || 'all',
@@ -957,6 +1110,8 @@ export function FarmProvider({ children }) {
     setGoals(INITIAL_GOALS);
     setDeliveries(INITIAL_DELIVERIES);
     setSplitSettings(INITIAL_SPLIT_SETTINGS);
+    setCompanies(INITIAL_COMPANIES);
+    setCurrentCompanyId('comp-fazenda');
     setCurrentUserId('mem-raquel');
     setClosedCycles([]);
   };
@@ -964,19 +1119,35 @@ export function FarmProvider({ children }) {
   return (
     <FarmContext.Provider
       value={{
+        // Multi-Company (Holding & Segmentos: Fazenda, Ferrovia, Taverna)
+        companies,
+        currentCompanyId,
+        currentCompany,
+        selectCompany,
+        addCompany,
+        updateCompany,
+        deleteCompany,
+        consolidatedBalance,
+        consolidatedIncome,
+        companyBalances,
+        // Members & Users
         members,
         currentUserId,
         setCurrentUserId,
         currentUser,
         currentRole,
-        transactions,
+        // Scoped and Global Data
+        allTransactions: transactions,
+        transactions: activeTransactions,
         totalIncome,
         totalExpense,
         totalBalance,
         operationalExpense,
         netProfit,
-        goals,
-        deliveries,
+        allGoals: goals,
+        goals: activeGoals,
+        allDeliveries: deliveries,
+        deliveries: activeDeliveries,
         pendingDeliveries,
         myPendingDeliveries,
         splitSettings,

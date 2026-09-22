@@ -52,6 +52,7 @@ export function toLocalTransaction(row) {
   if (!row) return null;
   return {
     id: row.id,
+    companyId: row.company_id || 'comp-fazenda',
     type: row.type,
     amount: Number(row.amount),
     memberId: row.member_id,
@@ -66,7 +67,7 @@ export function toLocalTransaction(row) {
 
 export function toDbTransaction(tx) {
   if (!tx) return null;
-  return {
+  const obj = {
     id: tx.id,
     type: tx.type,
     amount: Number(tx.amount),
@@ -77,12 +78,15 @@ export function toDbTransaction(tx) {
     date: tx.date,
     box_balance_after: tx.boxBalanceAfter != null ? Number(tx.boxBalanceAfter) : null,
   };
+  if (tx.companyId) obj.company_id = tx.companyId;
+  return obj;
 }
 
 export function toLocalGoal(row) {
   if (!row) return null;
   return {
     id: row.id,
+    companyId: row.company_id || 'comp-fazenda',
     title: row.title,
     type: row.type,
     unitType: row.unit_type,
@@ -102,7 +106,7 @@ export function toLocalGoal(row) {
 
 export function toDbGoal(g) {
   if (!g) return null;
-  return {
+  const obj = {
     id: g.id,
     title: g.title,
     type: g.type,
@@ -118,12 +122,15 @@ export function toDbGoal(g) {
     status: g.status,
     notes: g.notes,
   };
+  if (g.companyId) obj.company_id = g.companyId;
+  return obj;
 }
 
 export function toLocalDelivery(row) {
   if (!row) return null;
   return {
     id: row.id,
+    companyId: row.company_id || 'comp-fazenda',
     memberId: row.member_id,
     memberName: row.member_name,
     memberRole: row.member_role,

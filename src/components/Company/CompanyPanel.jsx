@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useFarm } from '../../context/FarmContext';
 import { ProfitSplitView } from '../OwnerProfitSplit/ProfitSplitView';
 import { MemberManager } from '../Members/MemberManager';
+import { MasterCompanyDashboard } from './MasterCompanyDashboard';
 import { 
   Building2, 
   Crown, 
@@ -13,12 +14,13 @@ import {
   ExternalLink,
   ShieldCheck,
   Settings,
-  Lock
+  Lock,
+  Layers
 } from 'lucide-react';
 
-export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings }) {
-  const { currentRole, discordSettings, dbStatus } = useFarm();
-  const [activeTab, setActiveTab] = useState('lucros'); // 'lucros' | 'contas' | 'conexoes'
+export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, onOpenCreateCompany }) {
+  const { currentRole, currentCompany, discordSettings, dbStatus } = useFarm();
+  const [activeTab, setActiveTab] = useState('holding'); // 'holding' | 'lucros' | 'contas' | 'conexoes'
 
   // Safety: If not owner, display locked message
   if (currentRole !== 'owner') {
@@ -43,23 +45,39 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings }) 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-300 flex items-center justify-center text-2xl shadow-inner">
-              👑
+              {currentCompany.icon || '👑'}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-extrabold text-stone-900">Painel da Empresa</h2>
+                <h2 className="text-xl font-extrabold text-stone-900">
+                  {activeTab === 'holding' ? 'Painel Master de Empresas' : currentCompany.name}
+                </h2>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 uppercase tracking-wide">
                   Exclusivo Dono
                 </span>
               </div>
               <p className="text-xs text-stone-500 mt-0.5">
-                Gestão estratégica da Fazenda Pantaneiros: lucros, equipe e conexões seguras.
+                {activeTab === 'holding' 
+                  ? 'Visão consolidada da holding e controle de todos os negócios.' 
+                  : `Gestão estratégica: lucros, equipe e conexões de ${currentCompany.name}.`}
               </p>
             </div>
           </div>
 
           {/* Tab Navigation Pill Bar */}
-          <div className="flex items-center gap-1.5 p-1.5 bg-stone-100/90 rounded-2xl border border-stone-200/80 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-stone-100/90 rounded-2xl border border-stone-200/80 self-start sm:self-auto">
+            <button
+              onClick={() => setActiveTab('holding')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'holding'
+                  ? 'bg-stone-900 text-white shadow-sm'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 text-amber-400" />
+              <span>Holding Master</span>
+            </button>
+
             <button
               onClick={() => setActiveTab('lucros')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
@@ -99,7 +117,12 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings }) 
         </div>
       </div>
 
-      {/* Tab 1: Repartição de Lucros */}
+      {/* Tab 1: Holding Master Dashboard */}
+      {activeTab === 'holding' && (
+        <MasterCompanyDashboard onOpenCreateCompany={onOpenCreateCompany} />
+      )}
+
+      {/* Tab 2: Repartição de Lucros da Empresa Ativa */}
       {activeTab === 'lucros' && (
         <div>
           <ProfitSplitView />

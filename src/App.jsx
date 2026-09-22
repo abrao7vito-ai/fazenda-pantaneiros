@@ -6,6 +6,7 @@ import { GoalManager } from './components/Goals/GoalManager';
 import { ProfitSplitView } from './components/OwnerProfitSplit/ProfitSplitView';
 import { MemberManager } from './components/Members/MemberManager';
 import { CompanyPanel } from './components/Company/CompanyPanel';
+import { CreateCompanyModal } from './components/Company/CreateCompanyModal';
 import { TransactionFormModal } from './components/CashFlow/TransactionFormModal';
 import { SubmitDeliveryModal } from './components/Deliveries/SubmitDeliveryModal';
 import { DiscordSettingsModal } from './components/Discord/DiscordSettingsModal';
@@ -30,6 +31,7 @@ function AppLayout() {
   const [isDiscordModalOpen, setIsDiscordModalOpen] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isDbModalOpen, setIsDbModalOpen] = useState(false);
+  const [isCreateCompanyOpen, setIsCreateCompanyOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const { 
@@ -37,6 +39,7 @@ function AppLayout() {
     myPendingDeliveries, 
     currentUser, 
     currentRole,
+    currentCompany,
     discordSettings,
     dbStatus
   } = useFarm();
@@ -59,22 +62,22 @@ function AppLayout() {
     switch (activeTab) {
       case 'cashflow':
         return {
-          title: 'Fluxo de Caixa & Lançamentos',
-          subtitle: 'Histórico de Entradas, Saídas e Saldo Oficial em DOLS',
+          title: `Fluxo de Caixa • ${currentCompany?.name}`,
+          subtitle: `Histórico de Entradas, Saídas e Saldo em DOLS de ${currentCompany?.name}`,
         };
       case 'goals':
         return {
-          title: 'Painel de Metas & Entrega de Sacas',
-          subtitle: 'Metas de Produção e Validação de Entregas da Fazenda',
+          title: `Metas & Entregas • ${currentCompany?.name}`,
+          subtitle: `Metas de ${currentCompany?.unitLabel} e Validação Operacional`,
         };
       case 'company':
         return {
-          title: 'Painel da Empresa',
-          subtitle: 'Exclusivo para Donos • Divisão de Lucros, Gestão de Contas e Conexões',
+          title: 'Painel Master de Empresas',
+          subtitle: 'Holding Pantaneiros • Controle de todos os negócios, lucros e conexões',
         };
       default:
         return {
-          title: 'Fazenda Pantaneiros',
+          title: currentCompany?.name || 'Fazenda Pantaneiros',
           subtitle: 'Painel Integrado de Gestão',
         };
     }
@@ -144,6 +147,10 @@ function AppLayout() {
                 setIsDbModalOpen(true);
                 setIsMobileMenuOpen(false);
               }}
+              onOpenCreateCompany={() => {
+                setIsCreateCompanyOpen(true);
+                setIsMobileMenuOpen(false);
+              }}
             />
           </div>
         </div>
@@ -159,6 +166,7 @@ function AppLayout() {
           onOpenDiscordSettings={() => setIsDiscordModalOpen(true)}
           onOpenEditProfile={() => setIsEditProfileOpen(true)}
           onOpenDatabaseSettings={() => setIsDbModalOpen(true)}
+          onOpenCreateCompany={() => setIsCreateCompanyOpen(true)}
         />
       </div>
 
@@ -180,7 +188,7 @@ function AppLayout() {
             {pendingCount > 0 && (
               <button
                 onClick={() => setActiveTab('goals')}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold animate-pulse shadow-sm"
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold animate-pulse shadow-sm cursor-pointer"
               >
                 <Bell className="w-3.5 h-3.5 text-amber-700" />
                 <span>{pendingCount} entrega{pendingCount > 1 ? 's' : ''} p/ validar!</span>
@@ -190,16 +198,16 @@ function AppLayout() {
             {/* Quick Inform Delivery */}
             <button
               onClick={() => setIsDeliveryModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#6d3f23] hover:bg-[#54301b] text-white font-bold text-xs shadow-sm transition-all transform hover:-translate-y-0.5"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#6d3f23] hover:bg-[#54301b] text-white font-bold text-xs shadow-sm transition-all transform hover:-translate-y-0.5 cursor-pointer"
             >
-              <Wheat className="w-3.5 h-3.5 text-ouro-300" />
-              <span>Entregar Sacas</span>
+              <span>{currentCompany?.icon || '🌾'}</span>
+              <span>Entregar {currentCompany?.unitLabel?.split(' ')[0] || 'Produção'}</span>
             </button>
 
             {/* Quick Add DOLS */}
             <button
               onClick={() => setIsTxModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-pantanal-700 hover:bg-pantanal-800 text-white font-bold text-xs shadow-sm transition-all transform hover:-translate-y-0.5"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-pantanal-700 hover:bg-pantanal-800 text-white font-bold text-xs shadow-sm transition-all transform hover:-translate-y-0.5 cursor-pointer"
             >
               <PlusCircle className="w-3.5 h-3.5" />
               <span>Lançar DOLS</span>
@@ -240,6 +248,7 @@ function AppLayout() {
               <CompanyPanel
                 onOpenDiscordSettings={() => setIsDiscordModalOpen(true)}
                 onOpenDatabaseSettings={() => setIsDbModalOpen(true)}
+                onOpenCreateCompany={() => setIsCreateCompanyOpen(true)}
               />
             ) : (
               <div className="bg-white border border-stone-200 rounded-3xl p-12 text-center shadow-sm">
@@ -256,12 +265,12 @@ function AppLayout() {
         {/* Clean Footer */}
         <footer className="border-t border-stone-200 bg-white py-4 px-8 text-xs text-stone-500 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-stone-800">🌾 Fazenda Pantaneiros</span>
+            <span className="font-bold text-stone-800">{currentCompany?.icon} {currentCompany?.name}</span>
             <span>•</span>
-            <span>West Fox • Correio 82 • Tradição do Campo</span>
+            <span>{currentCompany?.code} • Holding Pantaneiros</span>
           </div>
           <div className="font-mono text-[11px] text-stone-400">
-            Valores em DOLS & Sacas de Milho
+            Valores em DOLS & {currentCompany?.unitLabel}
           </div>
         </footer>
 
@@ -291,6 +300,11 @@ function AppLayout() {
       <DatabaseStatusModal
         isOpen={isDbModalOpen}
         onClose={() => setIsDbModalOpen(false)}
+      />
+
+      <CreateCompanyModal
+        isOpen={isCreateCompanyOpen}
+        onClose={() => setIsCreateCompanyOpen(false)}
       />
 
     </div>

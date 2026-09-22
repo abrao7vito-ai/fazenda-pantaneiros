@@ -3,21 +3,21 @@ import { useFarm } from '../../context/FarmContext';
 import { X, Target, Wheat, Sparkles, DollarSign } from 'lucide-react';
 
 export function GoalModal({ isOpen, onClose }) {
-  const { members, currentRole, addGoal } = useFarm();
+  const { members, currentRole, addGoal, currentCompany } = useFarm();
 
   const isOwner = currentRole === 'owner';
   const defaultType = isOwner ? 'owner_to_manager' : 'manager_to_member';
 
   const [type, setType] = useState(defaultType);
   const [unitType, setUnitType] = useState('sacks');
-  const [unitLabel, setUnitLabel] = useState('Sacas de Milho');
-  const [title, setTitle] = useState('Meta de 100 Sacas de Milho');
+  const [unitLabel, setUnitLabel] = useState(currentCompany?.unitLabel || 'Sacas de Milho');
+  const [title, setTitle] = useState(`Meta de 100 ${currentCompany?.unitLabel || 'Sacas de Milho'}`);
   const [targetAmount, setTargetAmount] = useState('100');
   const [targetMemberId, setTargetMemberId] = useState('all');
   const [deadline, setDeadline] = useState(
     new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
-  const [notes, setNotes] = useState('Entregar sacas ensacadas para o gerente no armazém central.');
+  const [notes, setNotes] = useState('Entregar para a gerência conferir.');
 
   const eligibleMembers = members.filter((m) => {
     if (type === 'owner_to_manager') {
@@ -31,7 +31,11 @@ export function GoalModal({ isOpen, onClose }) {
     if (!targetMemberId) {
       setTargetMemberId('all');
     }
-  }, [targetMemberId]);
+    if (isOpen && currentCompany?.unitLabel) {
+      setUnitLabel(currentCompany.unitLabel);
+      setTitle(`Meta de 100 ${currentCompany.unitLabel}`);
+    }
+  }, [targetMemberId, isOpen, currentCompany]);
 
   if (!isOpen) return null;
 
@@ -99,8 +103,8 @@ export function GoalModal({ isOpen, onClose }) {
                 type="button"
                 onClick={() => {
                   setUnitType('sacks');
-                  setUnitLabel('Sacas de Milho');
-                  setTitle('Meta de 100 Sacas de Milho');
+                  setUnitLabel(currentCompany?.unitLabel || 'Sacas');
+                  setTitle(`Meta de 100 ${currentCompany?.unitLabel || 'Sacas'}`);
                   setTargetAmount('100');
                 }}
                 className={`p-3 rounded-2xl border text-left transition-all ${
@@ -110,11 +114,11 @@ export function GoalModal({ isOpen, onClose }) {
                 }`}
               >
                 <div className="font-bold flex items-center gap-1.5 text-xs">
-                  <Wheat className="w-4 h-4 text-amber-700" />
-                  <span>Sacas de Milho (Safra)</span>
+                  <span className="text-base">{currentCompany?.icon || '🌾'}</span>
+                  <span>{currentCompany?.unitLabel || 'Produção Física'}</span>
                 </div>
                 <div className="text-[10px] text-stone-500 mt-1">
-                  Membro entrega sacas & Gerente confirma
+                  Membro entrega e Gerente confirma
                 </div>
               </button>
 
