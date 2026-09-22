@@ -63,6 +63,12 @@ export function RouteChecklistManager() {
     updateRouteItem(routeId, itemId, { markCompleted: !currentStatus });
   };
 
+  const handleSetQuantity = (routeId, itemId, val) => {
+    const num = Math.max(0, parseFloat(val) || 0);
+    updateRouteItem(routeId, itemId, { setQuantity: num });
+    setItemInputs((prev) => ({ ...prev, [`${routeId}-${itemId}`]: num }));
+  };
+
   const handleCustomAdd = (routeId, itemId) => {
     const val = parseFloat(itemInputs[`${routeId}-${itemId}`]);
     if (isNaN(val) || val <= 0) return;
@@ -328,37 +334,127 @@ export function RouteChecklistManager() {
                                 <Check className="w-3.5 h-3.5 stroke-[3]" />
                               </button>
 
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <div className="text-xs font-bold truncate flex items-center gap-1.5">
                                   <span className={`font-mono font-black text-[11px] ${itemDone ? 'text-emerald-400' : 'text-[#e8533c]'}`}>
                                     {item.targetAmount}x
                                   </span>
                                   <span className="truncate">{item.name}</span>
                                 </div>
-                                <div className="text-[10px] text-stone-400 font-mono mt-0.5">
-                                  Coletado: <strong className={itemDone ? 'text-emerald-300' : 'text-amber-300'}>{item.currentAmount || 0}</strong> / {item.targetAmount}
+
+                                {/* Campo Editável Manual: Digite qualquer quantidade diretamente */}
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className="text-[10px] text-stone-400 font-mono">Coletado:</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={item.targetAmount}
+                                    value={itemInputs[`${route.id}-${item.id}`] !== undefined ? itemInputs[`${route.id}-${item.id}`] : (item.currentAmount || 0)}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setItemInputs((prev) => ({ ...prev, [`${route.id}-${item.id}`]: val }));
+                                    }}
+                                    onBlur={(e) => {
+                                      const raw = e.target.value.trim();
+                                      if (raw !== '') {
+                                        const parsed = parseFloat(raw);
+                                        if (!isNaN(parsed)) {
+                                          handleSetQuantity(route.id, item.id, Math.min(item.targetAmount, Math.max(0, parsed)));
+                                        }
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.target.blur();
+                                      }
+                                    }}
+                                    className={`w-16 sm:w-20 px-2 py-0.5 rounded-lg border font-mono font-extrabold text-xs text-center transition-all outline-none ${
+                                      itemDone
+                                        ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
+                                        : 'bg-stone-950 border-stone-700 hover:border-amber-400 text-amber-300 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/50 shadow-inner'
+                                    }`}
+                                    title="Clique para digitar qualquer quantidade e pressione Enter"
+                                  />
+                                  <span className="text-[10px] text-stone-400 font-mono">/ {item.targetAmount}</span>
                                 </div>
                               </div>
                             </div>
 
-                            {/* Quick Add Quantity Buttons */}
+                            {/* Quick Add / 100% Buttons */}
                             <div className="flex items-center gap-1 shrink-0">
+                              {/* Botão de Preencher 100% */}
                               <button
                                 type="button"
-                                onClick={() => handleQuickAdd(route.id, item.id, item.targetAmount >= 50 ? 50 : 5)}
-                                className="px-1.5 py-0.5 rounded bg-stone-800 hover:bg-amber-500 hover:text-stone-950 text-[10px] font-mono font-bold text-stone-300 border border-stone-700 transition-colors cursor-pointer"
-                                title={`Adicionar +${item.targetAmount >= 50 ? 50 : 5}`}
+                                onClick={() => handleToggleComplete(route.id, item.id, itemDone)}
+                                className={`px-2 py-1 rounded-lg text-[10px] font-mono font-black border transition-all cursor-pointer ${
+                                  itemDone
+                                    ? 'bg-emerald-600 text-stone-950 border-emerald-400'
+                                    : 'bg-stone-800 hover:bg-emerald-600 hover:text-white text-stone-300 border-stone-700'
+                                }`}
+                                title={itemDone ? 'Desmarcar' : 'Preencher 100%'}
                               >
-                                +{item.targetAmount >= 50 ? 50 : 5}
+                                {itemDone ? '✓' : '100%'}
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => handleQuickAdd(route.id, item.id, 1)}
-                                className="px-1.5 py-0.5 rounded bg-stone-800 hover:bg-amber-500 hover:text-stone-950 text-[10px] font-mono font-bold text-stone-300 border border-stone-700 transition-colors cursor-pointer"
-                                title="Adicionar +1"
-                              >
-                                +1
-                              </button>
+
+                              {/* Botão adaptativo rápido */}
+                              {item.targetAmount >= 1000 ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickAdd(route.id, item.id, 500)}
+                                    className="px-1.5 py-1 rounded bg-stone-800 hover:bg-amber-500 hover:text-stone-950 text-[10px] font-mono font-bold text-stone-300 border border-stone-700 transition-colors cursor-pointer"
+                                    title="Adicionar +500"
+                                  >
+                                    +500
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickAdd(route.id, item.id, 100)}
+                                    className="px-1.5 py-1 rounded bg-stone-800 hover:bg-amber-500 hover:text-stone-950 text-[10px] font-mono font-bold text-stone-300 border border-stone-700 transition-colors cursor-pointer"
+                                    title="Adicionar +100"
+                                  >
+                                    +100
+                                  </button>
+                                </>
+                              ) : item.targetAmount >= 100 ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickAdd(route.id, item.id, 50)}
+                                    className="px-1.5 py-1 rounded bg-stone-800 hover:bg-amber-500 hover:text-stone-950 text-[10px] font-mono font-bold text-stone-300 border border-stone-700 transition-colors cursor-pointer"
+                                    title="Adicionar +50"
+                                  >
+                                    +50
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickAdd(route.id, item.id, 10)}
+                                    className="px-1.5 py-1 rounded bg-stone-800 hover:bg-amber-500 hover:text-stone-950 text-[10px] font-mono font-bold text-stone-300 border border-stone-700 transition-colors cursor-pointer"
+                                    title="Adicionar +10"
+                                  >
+                                    +10
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickAdd(route.id, item.id, 5)}
+                                    className="px-1.5 py-1 rounded bg-stone-800 hover:bg-amber-500 hover:text-stone-950 text-[10px] font-mono font-bold text-stone-300 border border-stone-700 transition-colors cursor-pointer"
+                                    title="Adicionar +5"
+                                  >
+                                    +5
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickAdd(route.id, item.id, 1)}
+                                    className="px-1.5 py-1 rounded bg-stone-800 hover:bg-amber-500 hover:text-stone-950 text-[10px] font-mono font-bold text-stone-300 border border-stone-700 transition-colors cursor-pointer"
+                                    title="Adicionar +1"
+                                  >
+                                    +1
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
                         );
