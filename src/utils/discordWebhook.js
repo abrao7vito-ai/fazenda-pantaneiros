@@ -241,3 +241,105 @@ export async function sendPayrollDiscordLog(webhookUrl, {
     embeds: [embed],
   });
 }
+
+/**
+ * Send Route Started Notification
+ */
+export async function sendRouteStartedDiscordLog(webhookUrl, { route, startedBy, companyName }) {
+  const itemsText = (route.items || [])
+    .map((it) => `• \`[0/${it.targetAmount}]\` **${it.name}**`)
+    .join('\n');
+
+  const embed = {
+    title: `${route.icon || '🚂'} ROTA INICIADA: ${route.title.toUpperCase()}`,
+    description: `A rota foi aceita por **${startedBy}** para a empresa **${companyName || 'Fazenda Pantaneiros'}**!\n\n**Lista de Cargas Necessárias:**\n${itemsText}`,
+    color: 0xeab308, // amber-500
+    fields: [
+      { name: '💰 Recompensa da Rota', value: formatDols(route.rewardAmount), inline: true },
+      { name: '📦 Total de Itens', value: `${route.items?.length || 0} cargas`, inline: true },
+      { name: '👤 Responsável', value: startedBy, inline: true },
+    ],
+    footer: {
+      text: 'Fazenda Pantaneiros • Checklist de Rotas & Missões',
+    },
+    timestamp: new Date().toISOString(),
+  };
+
+  return sendDiscordPayload(webhookUrl, {
+    content: `🚂 **NOVA ROTA INICIADA: ${route.title} • RECOMPENSA ${formatDols(route.rewardAmount)}**`,
+    embeds: [embed],
+  });
+}
+
+/**
+ * Send Route Progress Update
+ */
+export async function sendRouteProgressDiscordLog(webhookUrl, { route, item, updatedBy, companyName }) {
+  const completedCount = (route.items || []).filter((i) => i.completed || (Number(i.currentAmount) >= Number(i.targetAmount))).length;
+  const totalCount = route.items?.length || 1;
+  const percent = Math.round((completedCount / totalCount) * 100);
+
+  const filledBlocks = Math.max(0, Math.min(10, Math.round(percent / 10)));
+  const emptyBlocks = 10 - filledBlocks;
+  const progressBar = '█'.repeat(filledBlocks) + '░'.repeat(emptyBlocks);
+
+  const itemsList = (route.items || []).map((it) => {
+    const isDone = it.completed || (Number(it.currentAmount) >= Number(it.targetAmount));
+    const icon = isDone ? '✅' : '⏳';
+    return `${icon} \`[${it.currentAmount}/${it.targetAmount}]\` **${it.name}** ${isDone ? '*(Pronto)*' : ''}`;
+  }).join('\n');
+
+  const embed = {
+    title: `${route.icon || '📦'} PROGRESSO DA ROTA: ${route.title}`,
+    description: `Atualização de carga feita por **${updatedBy}**:\n` +
+      (item ? `> **Item Atualizado:** **${item.name}** → \`${item.currentAmount}/${item.targetAmount}\`\n\n` : '\n') +
+      `**Status do Checklist (${percent}%):**\n\`[${progressBar}]\` ${completedCount}/${totalCount} cargas prontas\n\n` +
+      `**Cargas:**\n${itemsList}`,
+    color: percent === 100 ? 0x22c55e : 0x3b82f6,
+    fields: [
+      { name: '💰 Recompensa', value: formatDols(route.rewardAmount), inline: true },
+      { name: '🏢 Empresa', value: companyName || 'Fazenda Pantaneiros', inline: true },
+      { name: '📊 Conclusão', value: `${percent}%`, inline: true },
+    ],
+    footer: {
+      text: 'Fazenda Pantaneiros • Sistema de Rotas & Cargas',
+    },
+    timestamp: new Date().toISOString(),
+  };
+
+  return sendDiscordPayload(webhookUrl, {
+    content: `📦 **ATUALIZAÇÃO DE ROTA: ${route.title} (${percent}% Concluído)**`,
+    embeds: [embed],
+  });
+}
+
+/**
+ * Send Route Completed Notification
+ */
+export async function sendRouteCompletedDiscordLog(webhookUrl, { route, completedBy, companyName, creditedToBox }) {
+  const itemsList = (route.items || [])
+    .map((it) => `✅ \`[${it.targetAmount}/${it.targetAmount}]\` **${it.name}** (100% Entregue)`)
+    .join('\n');
+
+  const embed = {
+    title: `🎉 ROTA CONCLUÍDA: ${route.title.toUpperCase()}`,
+    description: `A entrega de todas as cargas foi finalizada com sucesso por **${completedBy}**!\n\n` +
+      `**Cargas Entregues:**\n${itemsList}\n\n` +
+      (creditedToBox ? `💵 **O valor de ${formatDols(route.rewardAmount)} foi creditado no caixa da empresa!**` : ''),
+    color: 0x22c55e, // emerald-500
+    fields: [
+      { name: '💰 Recompensa Recebida', value: formatDols(route.rewardAmount), inline: true },
+      { name: '🏢 Empresa Beneficiada', value: companyName || 'Fazenda Pantaneiros', inline: true },
+      { name: '🏆 Finalizado Por', value: completedBy, inline: true },
+    ],
+    footer: {
+      text: 'Fazenda Pantaneiros • Missão Cumprida!',
+    },
+    timestamp: new Date().toISOString(),
+  };
+
+  return sendDiscordPayload(webhookUrl, {
+    content: `🎉 **ROTA FINALIZADA COM SUCESSO: ${route.title} • RECOMPENSA DE ${formatDols(route.rewardAmount)} RECEBIDA!**`,
+    embeds: [embed],
+  });
+}

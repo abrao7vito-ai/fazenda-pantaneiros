@@ -12,6 +12,7 @@ import { SubmitDeliveryModal } from './components/Deliveries/SubmitDeliveryModal
 import { DiscordSettingsModal } from './components/Discord/DiscordSettingsModal';
 import { EditProfileModal } from './components/Accounts/EditProfileModal';
 import { DatabaseStatusModal } from './components/Database/DatabaseStatusModal';
+import { RouteChecklistManager } from './components/Routes/RouteChecklistManager';
 import { LoginScreen } from './components/Auth/LoginScreen';
 import { formatDols } from './utils/formatters';
 import { 
@@ -77,6 +78,11 @@ function AppLayout() {
         return {
           title: `Metas & Entregas • ${currentCompany?.name}`,
           subtitle: `Metas de ${currentCompany?.unitLabel} e Validação Operacional`,
+        };
+      case 'routes':
+        return {
+          title: `Rotas & Missões • ${currentCompany?.name}`,
+          subtitle: `Checklist de Cargas, Entregas e Integração Discord`,
         };
       case 'company':
         return {
@@ -251,6 +257,10 @@ function AppLayout() {
 
           {activeTab === 'goals' && (
             <GoalManager onOpenSubmitDelivery={() => setIsDeliveryModalOpen(true)} />
+          )}
+
+          {activeTab === 'routes' && (
+            <RouteChecklistManager />
           )}
 
           {activeTab === 'company' && (

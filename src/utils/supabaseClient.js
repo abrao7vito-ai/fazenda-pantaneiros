@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://isqjusvluobjooknybdu.supabase.co';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_4rVEwpMQgn9675svYG9Dzw_bl6iD5Zr';
+const SUPABASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_SUPABASE_URL) || 'https://isqjusvluobjooknybdu.supabase.co';
+const SUPABASE_ANON_KEY = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_SUPABASE_ANON_KEY) || 'sb_publishable_4rVEwpMQgn9675svYG9Dzw_bl6iD5Zr';
 
 export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
@@ -15,7 +15,26 @@ export const supabase = isSupabaseConfigured
 
 // ==========================================
 // MAPPERS: Supabase (snake_case) <-> App (camelCase)
+// Safely maps metadata to avoid nonexistent column errors (e.g. company_id)
 // ==========================================
+
+export function encodeCompanyTag(text = '', companyId = 'comp-fazenda') {
+  if (!companyId || companyId === 'comp-fazenda') return text || '';
+  const clean = (text || '').replace(/^\[EMP:[^\]]+\]\s*/, '');
+  return `[EMP:${companyId}] ${clean}`.trim();
+}
+
+export function extractCompanyTag(text = '', fallback = 'comp-fazenda') {
+  if (!text) return { companyId: fallback, cleanText: '' };
+  const match = String(text).match(/^\[EMP:([^\]]+)\]\s*/);
+  if (match) {
+    return {
+      companyId: match[1],
+      cleanText: String(text).replace(match[0], ''),
+    };
+  }
+  return { companyId: fallback, cleanText: text };
+}
 
 export function toLocalMember(row) {
   if (!row) return null;
@@ -36,7 +55,7 @@ export function toLocalMember(row) {
 
 export function toDbMember(m) {
   if (!m) return null;
-  const obj = {
+  return {
     id: m.id,
     name: m.name,
     role: m.role,
@@ -47,23 +66,20 @@ export function toDbMember(m) {
     pin: m.pin || '1234',
     active: m.active ?? true,
   };
-  if (m.companyId) {
-    obj.company_id = m.companyId;
-  }
-  return obj;
 }
 
 export function toLocalTransaction(row) {
   if (!row) return null;
+  const { companyId, cleanText } = extractCompanyTag(row.description, row.company_id || 'comp-fazenda');
   return {
     id: row.id,
-    companyId: row.company_id || 'comp-fazenda',
+    companyId,
     type: row.type,
     amount: Number(row.amount),
     memberId: row.member_id,
     memberName: row.member_name,
     category: row.category,
-    description: row.description,
+    description: cleanText,
     date: row.date,
     boxBalanceAfter: row.box_balance_after != null ? Number(row.box_balance_after) : null,
     createdAt: row.created_at,
@@ -72,26 +88,25 @@ export function toLocalTransaction(row) {
 
 export function toDbTransaction(tx) {
   if (!tx) return null;
-  const obj = {
+  return {
     id: tx.id,
     type: tx.type,
     amount: Number(tx.amount),
     member_id: tx.memberId,
     member_name: tx.memberName,
     category: tx.category,
-    description: tx.description,
+    description: encodeCompanyTag(tx.description, tx.companyId),
     date: tx.date,
     box_balance_after: tx.boxBalanceAfter != null ? Number(tx.boxBalanceAfter) : null,
   };
-  if (tx.companyId) obj.company_id = tx.companyId;
-  return obj;
 }
 
 export function toLocalGoal(row) {
   if (!row) return null;
+  const { companyId, cleanText } = extractCompanyTag(row.notes, row.company_id || 'comp-fazenda');
   return {
     id: row.id,
-    companyId: row.company_id || 'comp-fazenda',
+    companyId,
     title: row.title,
     type: row.type,
     unitType: row.unit_type,
@@ -104,14 +119,14 @@ export function toLocalGoal(row) {
     currentAmount: Number(row.current_amount),
     deadline: row.deadline,
     status: row.status,
-    notes: row.notes,
+    notes: cleanText,
     createdAt: row.created_at,
   };
 }
 
 export function toDbGoal(g) {
   if (!g) return null;
-  const obj = {
+  return {
     id: g.id,
     title: g.title,
     type: g.type,
@@ -125,17 +140,16 @@ export function toDbGoal(g) {
     current_amount: Number(g.currentAmount),
     deadline: g.deadline,
     status: g.status,
-    notes: g.notes,
+    notes: encodeCompanyTag(g.notes, g.companyId),
   };
-  if (g.companyId) obj.company_id = g.companyId;
-  return obj;
 }
 
 export function toLocalDelivery(row) {
   if (!row) return null;
+  const { companyId, cleanText } = extractCompanyTag(row.notes, row.company_id || 'comp-fazenda');
   return {
     id: row.id,
-    companyId: row.company_id || 'comp-fazenda',
+    companyId,
     memberId: row.member_id,
     memberName: row.member_name,
     memberRole: row.member_role,
@@ -144,7 +158,7 @@ export function toLocalDelivery(row) {
     goalId: row.goal_id,
     quantity: Number(row.quantity),
     itemType: row.item_type,
-    notes: row.notes,
+    notes: cleanText,
     proofUrl: row.proof_url,
     status: row.status,
     date: row.date,
@@ -169,7 +183,7 @@ export function toDbDelivery(d) {
     goal_id: d.goalId,
     quantity: Number(d.quantity),
     item_type: d.itemType,
-    notes: d.notes,
+    notes: encodeCompanyTag(d.notes, d.companyId),
     proof_url: d.proofUrl,
     status: d.status,
     date: d.date,

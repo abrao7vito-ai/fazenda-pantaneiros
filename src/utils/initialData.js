@@ -222,3 +222,63 @@ export const INITIAL_SPLIT_SETTINGS = {
   membersPercent: 35,     // Base dos Donos e Produtores
   bonusForGoalAchieved: 883.33,
 };
+
+// Rotas & Missões com Checklist (Fazenda, Ferrovia, Taverna)
+export const INITIAL_ROUTES = [
+  {
+    id: 'route-fazendeiros-01',
+    companyId: 'comp-fazenda',
+    title: 'Entrega de Fazendeiros',
+    rewardAmount: 2300,
+    icon: '📦',
+    description: 'Coleta e entrega de sacas agrícolas da fazenda para o entreposto comercial.',
+    status: 'in_progress',
+    startedBy: 'William Erick',
+    startedAt: new Date().toISOString(),
+    completedAt: null,
+    items: [
+      { id: 'item-cafe', name: 'Saco de café', targetAmount: 15, currentAmount: 0, completed: false, unit: 'sacos' },
+      { id: 'item-amora', name: 'Saco de Amora', targetAmount: 15, currentAmount: 0, completed: false, unit: 'sacos' },
+      { id: 'item-algodao', name: 'Saco de algodão', targetAmount: 15, currentAmount: 0, completed: false, unit: 'sacos' },
+      { id: 'item-milho', name: 'Saco de Milho', targetAmount: 15, currentAmount: 0, completed: false, unit: 'sacos' },
+      { id: 'item-maca', name: 'Saco de Maçã', targetAmount: 15, currentAmount: 0, completed: false, unit: 'sacos' },
+      { id: 'item-banana', name: 'Saco de Banana', targetAmount: 15, currentAmount: 0, completed: false, unit: 'sacos' },
+    ],
+  },
+  {
+    id: 'route-ferrovia-01',
+    companyId: 'comp-ferrovia',
+    title: 'Rota Ferroviária Expressa West Fox',
+    rewardAmount: 4200,
+    icon: '🚂',
+    description: 'Carga pesada da ferrovia: transporte de laticínios, minérios e carvão.',
+    status: 'in_progress',
+    startedBy: 'William Erick',
+    startedAt: new Date().toISOString(),
+    completedAt: null,
+    items: [
+      { id: 'item-leite', name: 'Garrafas de Leite', targetAmount: 400, currentAmount: 0, completed: false, unit: 'garrafas' },
+      { id: 'item-carvao', name: 'Cargas de Carvão', targetAmount: 50, currentAmount: 0, completed: false, unit: 'cargas' },
+      { id: 'item-ferro', name: 'Barras de Ferro', targetAmount: 80, currentAmount: 0, completed: false, unit: 'barras' },
+      { id: 'item-madeira', name: 'Toras de Madeira', targetAmount: 120, currentAmount: 0, completed: false, unit: 'toras' },
+    ],
+  },
+  {
+    id: 'route-taverna-01',
+    companyId: 'comp-taverna',
+    title: 'Abastecimento da Taberna dos Pantaneiros',
+    rewardAmount: 3100,
+    icon: '🍺',
+    description: 'Reposição de barris de chopp, whisky artesanal e carnes nobres.',
+    status: 'template',
+    startedBy: null,
+    startedAt: null,
+    completedAt: null,
+    items: [
+      { id: 'item-cerveja', name: 'Barris de Cerveja', targetAmount: 30, currentAmount: 0, completed: false, unit: 'barris' },
+      { id: 'item-whisky', name: 'Barris de Whisky', targetAmount: 20, currentAmount: 0, completed: false, unit: 'barris' },
+      { id: 'item-carne', name: 'Carnes de Caça', targetAmount: 50, currentAmount: 0, completed: false, unit: 'cortes' },
+      { id: 'item-trigo', name: 'Sacos de Trigo', targetAmount: 40, currentAmount: 0, completed: false, unit: 'sacos' },
+    ],
+  },
+];

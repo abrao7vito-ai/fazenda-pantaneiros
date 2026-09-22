@@ -6,6 +6,7 @@ import {
   INITIAL_DELIVERIES,
   INITIAL_SPLIT_SETTINGS,
   INITIAL_COMPANIES,
+  INITIAL_ROUTES,
 } from '../utils/initialData';
 import { 
   generateReportMessage, 
@@ -17,6 +18,9 @@ import {
   sendDeliverySubmittedDiscordLog,
   sendDeliveryConfirmedDiscordLog,
   sendPayrollDiscordLog,
+  sendRouteStartedDiscordLog,
+  sendRouteProgressDiscordLog,
+  sendRouteCompletedDiscordLog,
 } from '../utils/discordWebhook';
 import {
   supabase,
@@ -46,6 +50,7 @@ const STORAGE_KEYS = {
   DISCORD: 'pantaneiros_team_discord_v1',
   COMPANIES: 'pantaneiros_companies_v2',
   ACTIVE_COMPANY: 'pantaneiros_active_company_v2',
+  ROUTES: 'pantaneiros_routes_v1',
 };
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutos em milissegundos
@@ -163,6 +168,16 @@ export function FarmProvider({ children }) {
         };
   });
 
+  const [routes, setRoutes] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ROUTES);
+      const list = saved ? JSON.parse(saved) : INITIAL_ROUTES;
+      return Array.isArray(list) && list.length > 0 ? list : INITIAL_ROUTES;
+    } catch (e) {
+      return INITIAL_ROUTES;
+    }
+  });
+
   // --- Authentication & 15-Minute Inactivity States ---
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     // Requires login explicitly - check active session
@@ -214,6 +229,10 @@ export function FarmProvider({ children }) {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.DISCORD, JSON.stringify(discordSettings));
   }, [discordSettings]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.ROUTES, JSON.stringify(routes));
+  }, [routes]);
 
   // --- Supabase Cloud Sync & Realtime Status ---
   const [dbStatus, setDbStatus] = useState('connecting'); // 'connecting' | 'connected' | 'tables_missing' | 'offline' | 'error'
@@ -292,6 +311,9 @@ export function FarmProvider({ children }) {
       if (settingsData) {
         settingsData.forEach((row) => {
           if (row.key === 'split' && row.value) setSplitSettings(row.value);
+          if (row.key === 'routes' && Array.isArray(row.value) && row.value.length > 0) {
+            setRoutes(row.value);
+          }
           if (row.key === 'companies' && Array.isArray(row.value) && row.value.length > 0) {
             setCompanies(row.value);
           }
@@ -386,6 +408,7 @@ export function FarmProvider({ children }) {
           if (payload.new.key === 'split' && payload.new.value) setSplitSettings(payload.new.value);
           if (payload.new.key === 'discord' && payload.new.value) setDiscordSettings(payload.new.value);
           if (payload.new.key === 'companies' && Array.isArray(payload.new.value)) setCompanies(payload.new.value);
+          if (payload.new.key === 'routes' && Array.isArray(payload.new.value)) setRoutes(payload.new.value);
         }
       })
       .subscribe();
@@ -660,6 +683,10 @@ export function FarmProvider({ children }) {
 
   const activeDeliveries = deliveries.filter(
     (d) => (d.companyId || 'comp-fazenda') === currentCompanyId
+  );
+
+  const activeRoutes = routes.filter(
+    (r) => (r.companyId || 'comp-fazenda') === currentCompanyId
   );
 
   // Financial Calculations for Active Company
@@ -1265,6 +1292,236 @@ export function FarmProvider({ children }) {
     }
   };
 
+  // --- Rotas & Missões com Checklist (Fazenda, Ferrovia, Taverna) ---
+
+  const startRoute = (routeId) => {
+    const route = routes.find((r) => r.id === routeId);
+    if (!route) return;
+
+    const startedAt = new Date().toISOString();
+    const startedBy = currentUser?.name || 'Membro';
+
+    const updated = routes.map((r) =>
+      r.id === routeId
+        ? {
+            ...r,
+            status: 'in_progress',
+            startedBy,
+            startedAt,
+            completedAt: null,
+          }
+        : r
+    );
+
+    setRoutes(updated);
+
+    if (supabase) {
+      supabase.from('farm_settings').upsert({
+        key: 'routes',
+        value: updated,
+        updated_at: new Date().toISOString(),
+      }).then();
+    }
+
+    if (discordSettings?.enabled && discordSettings?.webhookUrl) {
+      const company = companies.find((c) => c.id === route.companyId) || currentCompany;
+      sendRouteStartedDiscordLog(discordSettings.webhookUrl, {
+        route,
+        startedBy,
+        companyName: company?.name,
+      }).catch((e) => console.error('Erro ao enviar log de rota para Discord:', e));
+    }
+  };
+
+  const updateRouteItem = (routeId, itemId, { addQuantity, setQuantity, markCompleted } = {}) => {
+    let updatedItem = null;
+    let targetRoute = null;
+
+    const updated = routes.map((r) => {
+      if (r.id !== routeId) return r;
+
+      const newItems = (r.items || []).map((it) => {
+        if (it.id !== itemId) return it;
+
+        let newCurrent = Number(it.currentAmount || 0);
+        if (addQuantity != null) {
+          newCurrent = Math.max(0, newCurrent + Number(addQuantity));
+        } else if (setQuantity != null) {
+          newCurrent = Math.max(0, Number(setQuantity));
+        }
+
+        let isCompleted = markCompleted != null ? Boolean(markCompleted) : (newCurrent >= it.targetAmount);
+        if (markCompleted === true) {
+          newCurrent = Math.max(newCurrent, it.targetAmount);
+          isCompleted = true;
+        }
+
+        updatedItem = {
+          ...it,
+          currentAmount: newCurrent,
+          completed: isCompleted,
+          updatedBy: currentUser?.name || 'Membro',
+          updatedAt: new Date().toISOString(),
+        };
+        return updatedItem;
+      });
+
+      targetRoute = {
+        ...r,
+        items: newItems,
+      };
+      return targetRoute;
+    });
+
+    setRoutes(updated);
+
+    if (supabase) {
+      supabase.from('farm_settings').upsert({
+        key: 'routes',
+        value: updated,
+        updated_at: new Date().toISOString(),
+      }).then();
+    }
+
+    if (discordSettings?.enabled && discordSettings?.webhookUrl && targetRoute) {
+      const company = companies.find((c) => c.id === targetRoute.companyId) || currentCompany;
+      sendRouteProgressDiscordLog(discordSettings.webhookUrl, {
+        route: targetRoute,
+        item: updatedItem,
+        updatedBy: currentUser?.name || 'Membro',
+        companyName: company?.name,
+      }).catch((e) => console.error('Erro ao enviar progresso da rota para Discord:', e));
+    }
+  };
+
+  const completeRoute = (routeId, { creditToBox = true } = {}) => {
+    const route = routes.find((r) => r.id === routeId);
+    if (!route) return;
+
+    const completedAt = new Date().toISOString();
+    const completedBy = currentUser?.name || 'Membro';
+
+    const completedItems = (route.items || []).map((it) => ({
+      ...it,
+      currentAmount: it.targetAmount,
+      completed: true,
+    }));
+
+    const updatedRoute = {
+      ...route,
+      status: 'completed',
+      completedAt,
+      completedBy,
+      items: completedItems,
+    };
+
+    const updated = routes.map((r) => (r.id === routeId ? updatedRoute : r));
+    setRoutes(updated);
+
+    if (supabase) {
+      supabase.from('farm_settings').upsert({
+        key: 'routes',
+        value: updated,
+        updated_at: new Date().toISOString(),
+      }).then();
+    }
+
+    // Credita recompensa no caixa da empresa
+    if (creditToBox && route.rewardAmount > 0) {
+      addTransaction({
+        type: 'income',
+        amount: route.rewardAmount,
+        category: 'Recompensa de Rota',
+        description: `Missão "${route.title}" concluída por ${completedBy}`,
+        companyId: route.companyId || currentCompanyId,
+      });
+    }
+
+    if (discordSettings?.enabled && discordSettings?.webhookUrl) {
+      const company = companies.find((c) => c.id === route.companyId) || currentCompany;
+      sendRouteCompletedDiscordLog(discordSettings.webhookUrl, {
+        route: updatedRoute,
+        completedBy,
+        companyName: company?.name,
+        creditedToBox: creditToBox && route.rewardAmount > 0,
+      }).catch((e) => console.error('Erro ao enviar conclusão da rota para Discord:', e));
+    }
+  };
+
+  const resetRoute = (routeId) => {
+    const route = routes.find((r) => r.id === routeId);
+    if (!route) return;
+
+    const resetItems = (route.items || []).map((it) => ({
+      ...it,
+      currentAmount: 0,
+      completed: false,
+    }));
+
+    const updated = routes.map((r) =>
+      r.id === routeId
+        ? {
+            ...r,
+            status: 'in_progress',
+            startedBy: currentUser?.name || 'Membro',
+            startedAt: new Date().toISOString(),
+            completedAt: null,
+            completedBy: null,
+            items: resetItems,
+          }
+        : r
+    );
+
+    setRoutes(updated);
+
+    if (supabase) {
+      supabase.from('farm_settings').upsert({
+        key: 'routes',
+        value: updated,
+        updated_at: new Date().toISOString(),
+      }).then();
+    }
+  };
+
+  const addCustomRoute = (newRoute) => {
+    const id = `route-${Date.now()}`;
+    const routeObj = {
+      id,
+      companyId: newRoute.companyId || currentCompanyId || 'comp-fazenda',
+      title: newRoute.title || 'Nova Rota',
+      rewardAmount: Number(newRoute.rewardAmount) || 0,
+      icon: newRoute.icon || '📦',
+      description: newRoute.description || '',
+      status: 'in_progress',
+      startedBy: currentUser?.name || 'Membro',
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+      items: newRoute.items || [],
+    };
+
+    const updated = [routeObj, ...routes];
+    setRoutes(updated);
+
+    if (supabase) {
+      supabase.from('farm_settings').upsert({
+        key: 'routes',
+        value: updated,
+        updated_at: new Date().toISOString(),
+      }).then();
+    }
+
+    if (discordSettings?.enabled && discordSettings?.webhookUrl) {
+      const company = companies.find((c) => c.id === routeObj.companyId) || currentCompany;
+      sendRouteStartedDiscordLog(discordSettings.webhookUrl, {
+        route: routeObj,
+        startedBy: currentUser?.name || 'Membro',
+        companyName: company?.name,
+      }).catch((e) => console.error(e));
+    }
+
+    return routeObj;
+  };
+
   const resetToDefaultData = () => {
     setMembers(INITIAL_MEMBERS);
     setTransactions(INITIAL_TRANSACTIONS);
@@ -1352,6 +1609,14 @@ export function FarmProvider({ children }) {
         updateMember,
         closeFinancialCycle,
         resetToDefaultData,
+        // Rotas & Missões com Checklist
+        routes: activeRoutes,
+        allRoutes: routes,
+        startRoute,
+        updateRouteItem,
+        completeRoute,
+        resetRoute,
+        addCustomRoute,
         // Discord Webhook Integration
         discordSettings,
         updateDiscordSettings,

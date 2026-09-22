@@ -17,7 +17,8 @@ import {
   Key, 
   ShieldCheck, 
   Database,
-  Building2
+  Building2,
+  Compass
 } from 'lucide-react';
 
 export function Sidebar({ 
@@ -84,6 +85,14 @@ export function Sidebar({
           badgeColor: 'bg-purple-100 text-purple-900 border-purple-300 font-bold',
         },
         {
+          id: 'routes',
+          label: 'Rotas & Missões',
+          subtitle: 'Checklist de Cargas',
+          icon: Compass,
+          badge: 'Checklist',
+          badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold',
+        },
+        {
           id: 'goals',
           label: 'Metas & Entregas',
           subtitle: `${currentCompany?.unitLabel || 'Produção'} & Validação`,
@@ -100,6 +109,14 @@ export function Sidebar({
         },
       ]
     : [
+        {
+          id: 'routes',
+          label: 'Rotas & Missões',
+          subtitle: 'Checklist de Cargas',
+          icon: Compass,
+          badge: 'Checklist',
+          badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold',
+        },
         {
           id: 'goals',
           label: 'Metas & Entregas',
