@@ -13,8 +13,16 @@ import {
   ArrowRight
 } from 'lucide-react';
 
-export function FirstAccessScreen({ inviteToken, memberTarget, onCompleted, onCancel }) {
-  const { completeFirstAccess, validateInviteToken, currentCompany, companies } = useFarm();
+export function FirstAccessScreen({ inviteToken, memberTarget, forcedResetUser, onCompleted, onCancel }) {
+  const { 
+    completeFirstAccess, 
+    validateInviteToken, 
+    currentCompany, 
+    companies, 
+    currentUser, 
+    mustChangePasswordUser, 
+    logout 
+  } = useFarm();
 
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
@@ -22,9 +30,15 @@ export function FirstAccessScreen({ inviteToken, memberTarget, onCompleted, onCa
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // If passed an invite token via URL, find matching member
-  const member = memberTarget || (inviteToken ? validateInviteToken(inviteToken)?.member : null);
+  // If passed an invite token via URL, find matching member. Otherwise use target/current member.
+  const member = memberTarget 
+    || forcedResetUser 
+    || mustChangePasswordUser 
+    || currentUser 
+    || (inviteToken ? validateInviteToken(inviteToken)?.member : null);
+
   const memberCompany = companies?.find(c => c.id === member?.companyId) || currentCompany;
+  const isForcedReset = Boolean(forcedResetUser || mustChangePasswordUser || (!inviteToken && (memberTarget || currentUser)));
 
   if (inviteToken && (!member || validateInviteToken(inviteToken)?.valid === false)) {
     const errorDetails = validateInviteToken(inviteToken)?.error || 'Convite expirado ou inválido.';
@@ -65,11 +79,17 @@ export function FirstAccessScreen({ inviteToken, memberTarget, onCompleted, onCa
     e.preventDefault();
     setErrorMsg('');
 
+    const targetMemberId = member?.id || mustChangePasswordUser?.id || currentUser?.id;
+    if (!targetMemberId && !inviteToken) {
+      setErrorMsg('Não foi possível identificar o usuário para redefinição. Faça login novamente.');
+      return;
+    }
+
     const cleanPin = pin.trim();
     const cleanConfirm = confirmPin.trim();
 
-    if (!cleanPin || cleanPin.length < 4) {
-      setErrorMsg('O seu PIN pessoal deve conter no mínimo 4 dígitos ou caracteres.');
+    if (!cleanPin || cleanPin.length < 4 || cleanPin.length > 8) {
+      setErrorMsg('O seu PIN pessoal deve conter entre 4 e 8 dígitos ou caracteres.');
       return;
     }
 
@@ -86,7 +106,7 @@ export function FirstAccessScreen({ inviteToken, memberTarget, onCompleted, onCa
     setIsSubmitting(true);
     try {
       const res = await completeFirstAccess({
-        memberId: member.id,
+        memberId: targetMemberId,
         newPin: cleanPin,
         inviteToken,
       });
@@ -119,10 +139,12 @@ export function FirstAccessScreen({ inviteToken, memberTarget, onCompleted, onCa
             {memberCompany?.icon || '🌾'}
           </div>
           <h2 className="text-xl font-black text-stone-900 tracking-tight">
-            Primeiro Acesso • Definição de Senha
+            {isForcedReset ? 'Redefinição Obrigatória de Senha' : 'Primeiro Acesso • Ativação de Conta'}
           </h2>
           <p className="text-xs text-stone-500 mt-1">
-            Defina seu PIN pessoal confidencial para acessar o sistema
+            {isForcedReset
+              ? 'Para a segurança da sua conta, defina sua nova senha pessoal antes de acessar'
+              : 'Defina seu PIN pessoal confidencial para acessar o sistema'}
           </p>
         </div>
 
@@ -240,15 +262,21 @@ export function FirstAccessScreen({ inviteToken, memberTarget, onCompleted, onCa
             <ArrowRight className="w-4 h-4" />
           </button>
 
-          {onCancel && (
+          <div className="pt-2 text-center">
             <button
               type="button"
-              onClick={onCancel}
-              className="w-full py-2 text-stone-500 hover:text-stone-800 text-xs font-semibold transition-colors cursor-pointer"
+              onClick={() => {
+                if (onCancel) {
+                  onCancel();
+                } else if (logout) {
+                  logout('user');
+                }
+              }}
+              className="text-stone-400 hover:text-stone-700 text-xs font-semibold underline transition-colors cursor-pointer"
             >
-              Cancelar e Sair
+              Sair da conta / Entrar como outro usuário
             </button>
-          )}
+          </div>
 
         </form>
 

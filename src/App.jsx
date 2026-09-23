@@ -381,6 +381,7 @@ function MainApp() {
     return (
       <FirstAccessScreen
         forcedResetUser={mustChangePasswordUser}
+        memberTarget={mustChangePasswordUser}
         onCompleted={() => {}}
       />
     );
