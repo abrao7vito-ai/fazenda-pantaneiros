@@ -18,12 +18,12 @@ export function Navbar({ onOpenNewTransaction, activeTab, setActiveTab }) {
     currentRole, 
     setCurrentUserId, 
     members,
-    resetToDefaultData 
+    refreshDbConnection
   } = useFarm();
 
-  const handleReset = () => {
-    if (window.confirm('Deseja restaurar os dados de demonstração da Fazenda Pantaneiros?')) {
-      resetToDefaultData();
+  const handleSync = async () => {
+    if (refreshDbConnection) {
+      await refreshDbConnection();
     }
   };
 
@@ -126,11 +126,11 @@ export function Navbar({ onOpenNewTransaction, activeTab, setActiveTab }) {
               <span>Novo Lançamento</span>
             </button>
 
-            {/* Reset Mock Data */}
+            {/* Sincronização em Nuvem */}
             <button
-              onClick={handleReset}
-              title="Restaurar dados padrão da fazenda"
-              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700/50 transition-colors"
+              onClick={handleSync}
+              title="Sincronizar em tempo real com o banco de dados Supabase"
+              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-emerald-400 border border-slate-700/50 transition-colors cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
             </button>

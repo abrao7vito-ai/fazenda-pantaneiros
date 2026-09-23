@@ -131,32 +131,6 @@ export const INITIAL_TRANSACTIONS = [
     date: '2026-09-19T18:00:00.000Z',
     boxBalanceAfter: 26500,
   },
-  // Ferrovia initial fund
-  {
-    id: 'tx-ferrovia-01',
-    companyId: 'comp-ferrovia',
-    type: 'income',
-    amount: 18000,
-    memberId: 'mem-raquel',
-    memberName: 'Raquel Souza [70]',
-    category: 'Transporte de Cargas',
-    description: 'Faturamento de frete e transporte de carvão no trem cargueiro',
-    date: new Date().toISOString(),
-    boxBalanceAfter: 18000,
-  },
-  // Taverna initial fund
-  {
-    id: 'tx-taverna-01',
-    companyId: 'comp-taverna',
-    type: 'income',
-    amount: 9500,
-    memberId: 'mem-raquel',
-    memberName: 'Raquel Souza [70]',
-    category: 'Venda de Bebidas & Refeições',
-    description: 'Caixa arrecadado no balcão da Taverna dos Pantaneiros',
-    date: new Date().toISOString(),
-    boxBalanceAfter: 9500,
-  },
 ];
 
 export const INITIAL_GOALS = [

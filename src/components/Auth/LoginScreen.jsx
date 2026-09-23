@@ -20,8 +20,9 @@ export function LoginScreen() {
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -38,13 +39,18 @@ export function LoginScreen() {
       return;
     }
 
-    const res = login({
-      identifier: cleanId,
-      pin: cleanPin,
-    });
+    setIsLoading(true);
+    try {
+      const res = await login({
+        identifier: cleanId,
+        pin: cleanPin,
+      });
 
-    if (!res.success) {
-      setErrorMsg(res.error || 'Passaporte/Nome ou PIN incorretos.');
+      if (!res.success) {
+        setErrorMsg(res.error || 'Passaporte/Nome ou PIN incorretos.');
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -167,10 +173,15 @@ export function LoginScreen() {
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full py-3 px-4 rounded-xl bg-pantanal-700 hover:bg-pantanal-800 text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 active:translate-y-0 mt-2 cursor-pointer"
+            disabled={isLoading}
+            className={`w-full py-3 px-4 rounded-xl text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 transition-all mt-2 ${
+              isLoading
+                ? 'bg-pantanal-600/70 cursor-not-allowed'
+                : 'bg-pantanal-700 hover:bg-pantanal-800 transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer'
+            }`}
           >
             <LogIn className="w-4 h-4" />
-            <span>Entrar no Sistema</span>
+            <span>{isLoading ? 'Autenticando...' : 'Entrar no Sistema'}</span>
           </button>
 
         </form>
