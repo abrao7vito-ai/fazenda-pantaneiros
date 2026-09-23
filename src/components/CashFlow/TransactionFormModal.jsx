@@ -36,16 +36,21 @@ export function TransactionFormModal({ isOpen, onClose }) {
       return;
     }
 
-    const { formattedReport } = addTransaction({
+    const res = addTransaction({
       type,
       amount: numAmount,
-      memberId: currentUser.id,
+      memberId: currentUser?.id,
       category,
       description,
       date: new Date(date + 'T12:00:00').toISOString(),
     });
 
-    setLastGeneratedMsg(formattedReport);
+    if (res?.error) {
+      alert(res.error);
+      return;
+    }
+
+    setLastGeneratedMsg(res?.formattedReport);
   };
 
   const handleCopy = async (textToCopy) => {

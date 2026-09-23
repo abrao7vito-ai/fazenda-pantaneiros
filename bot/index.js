@@ -26,17 +26,22 @@ dotenv.config({ path: path.resolve(__dirname, '.env') });
 dotenv.config();
 
 // ==========================================
-// CONFIGURAÇÕES & CREDENCIAIS
+// CONFIGURAÇÕES & CREDENCIAIS (Via process.env)
 // ==========================================
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
-const CLIENT_ID = process.env.DISCORD_CLIENT_ID || '1551998171889143838';
+const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const GUILD_ID = process.env.DISCORD_GUILD_ID || null;
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://isqjusvluobjooknybdu.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_4rVEwpMQgn9675svYG9Dzw_bl6iD5Zr';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const APP_URL = process.env.APP_URL || 'https://fazenda-pantaneiros.onrender.com';
 
-if (!TOKEN || TOKEN === 'COLE_SEU_TOKEN_AQUI') {
+if (!TOKEN || TOKEN === 'COLE_SEU_TOKEN_AQUI' || TOKEN === 'SEU_DISCORD_BOT_TOKEN_AQUI') {
   console.error('\n❌ ERRO: DISCORD_BOT_TOKEN não foi configurado no arquivo bot/.env!');
+  process.exit(1);
+}
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error('\n❌ ERRO: SUPABASE_URL e SUPABASE_ANON_KEY precisam ser configurados no arquivo bot/.env!');
   process.exit(1);
 }
 

@@ -34,9 +34,20 @@ import {
   toDbGoal,
   toLocalDelivery,
   toDbDelivery,
-  toLocalCycle,
   toDbCycle,
 } from '../utils/supabaseClient';
+import {
+  rateLimiter,
+  hashPin,
+  verifyPinDirect,
+  hasPermission,
+  PERMISSIONS,
+  ROLES,
+  logSecurityEvent,
+  sanitizeString,
+  sanitizePositiveNumber,
+  getAuditLogs,
+} from '../utils/security';
 
 const FarmContext = createContext();
 
@@ -120,10 +131,12 @@ export function FarmProvider({ children }) {
 
   const [currentUserId, setCurrentUserId] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-      return saved || 'mem-raquel'; // default is Dona (Raquel Souza)
+      const isAuth = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pantaneiros_auth_v1') === 'true';
+      if (!isAuth) return null;
+      const sessionUser = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('pantaneiros_user_id') : null;
+      return sessionUser || localStorage.getItem(STORAGE_KEYS.CURRENT_USER) || null;
     } catch (e) {
-      return 'mem-raquel';
+      return null;
     }
   });
 
@@ -448,34 +461,24 @@ export function FarmProvider({ children }) {
     };
   }, []);
 
-  // Guaranteed Fallback User to prevent undefined crashes under any circumstance
-  const fallbackUser = (INITIAL_MEMBERS && INITIAL_MEMBERS[0]) || {
-    id: 'mem-raquel',
-    name: 'Raquel Souza',
-    role: 'owner',
-    roleLabel: 'Dona da Fazenda',
-    companyId: 'comp-fazenda',
-    avatar: '👑',
-    passport: '70',
-    phone: '',
-    pin: '1234',
-    active: true,
-  };
+  // Current active user object - Strictly gated by authentication
+  const currentUser = isAuthenticated && currentUserId
+    ? (members && members.find((m) => m && m.id === currentUserId)) || null
+    : null;
 
-  // Current active user object
-  const currentUser =
-    (members && members.find((m) => m && m.id === currentUserId)) ||
-    (members && members.find((m) => m && m.role === 'owner')) ||
-    (members && members[0]) ||
-    fallbackUser;
-
-  const currentRole = currentUser?.role || 'owner';
+  const currentRole = currentUser?.role || ROLES.GUEST;
 
   // --- Auth Handlers & 15-Minute Inactivity Engine ---
   const login = ({ identifier, memberId, pin }) => {
     const rawId = (identifier !== undefined ? identifier : memberId || '').toString().trim();
     if (!rawId) {
       return { success: false, error: 'Por favor, informe seu ID, Passaporte ou Nome.' };
+    }
+
+    // 1. Rate Limiting Protection (Brute Force Defense)
+    const rateCheck = rateLimiter.checkLoginRateLimit(rawId);
+    if (!rateCheck.allowed) {
+      return { success: false, error: rateCheck.error };
     }
 
     const query = rawId.toLowerCase();
@@ -489,13 +492,21 @@ export function FarmProvider({ children }) {
     });
 
     if (!member) {
+      rateLimiter.recordFailedAttempt(rawId);
+      logSecurityEvent('LOGIN_FAILED', { userId: rawId, details: 'Conta não encontrada', success: false });
       return { success: false, error: 'Conta não encontrada com este Passaporte / ID ou Nome.' };
     }
 
     const expectedPin = member.pin || '1234';
-    if (!pin || String(pin).trim() !== String(expectedPin).trim()) {
+    if (!pin || !verifyPinDirect(pin, expectedPin)) {
+      rateLimiter.recordFailedAttempt(rawId);
+      logSecurityEvent('LOGIN_FAILED', { userId: member.id, userName: member.name, role: member.role, details: 'PIN incorreto', success: false });
       return { success: false, error: 'Senha / PIN incorreto para esta conta.' };
     }
+
+    // Login Successful
+    rateLimiter.recordSuccessfulLogin(rawId);
+    logSecurityEvent('LOGIN_SUCCESS', { userId: member.id, userName: member.name, role: member.role });
 
     setCurrentUserId(member.id);
     setIsAuthenticated(true);
@@ -505,24 +516,35 @@ export function FarmProvider({ children }) {
       sessionStorage.setItem('pantaneiros_auth_v1', 'true');
       sessionStorage.setItem('pantaneiros_user_id', member.id);
     }
+    try {
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, member.id);
+    } catch (_) {}
 
     // Strict SaaS Multi-Tenant Isolation:
     // When a non-master user logs in, instantly lock to their assigned company
     if (member.role !== 'master') {
       const userCompany = member.companyId && member.companyId !== 'all' ? member.companyId : 'comp-fazenda';
       setCurrentCompanyId(userCompany);
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_COMPANY, userCompany);
+      try {
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_COMPANY, userCompany);
+      } catch (_) {}
     }
 
     return { success: true, member };
   };
 
   const logout = (reason = 'user') => {
+    logSecurityEvent('LOGOUT', { userId: currentUser?.id, userName: currentUser?.name, role: currentRole, details: `Motivo: ${reason}` });
     setIsAuthenticated(false);
     setLogoutReason(reason);
+    setCurrentUserId(null);
     if (typeof sessionStorage !== 'undefined') {
       sessionStorage.removeItem('pantaneiros_auth_v1');
+      sessionStorage.removeItem('pantaneiros_user_id');
     }
+    try {
+      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+    } catch (_) {}
   };
 
   // 15-Minute Inactivity Watcher
@@ -635,21 +657,27 @@ export function FarmProvider({ children }) {
 
   const addCompany = ({ name, segment, icon, unitLabel, code, initialBalance = 0, description = '' }) => {
     if (currentRole !== 'master') {
-      alert('Acesso restrito: apenas o Administrador Master pode fundar novas empresas.');
-      return null;
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: 'Tentativa não autorizada de fundar nova empresa',
+        success: false,
+      });
+      return { success: false, error: 'Acesso restrito: apenas o Administrador Master pode fundar novas empresas.' };
     }
 
     const newId = `comp-${Date.now()}`;
     const newComp = {
       id: newId,
-      name: name.trim(),
+      name: sanitizeString(name, 80),
       type: 'general',
-      code: code ? code.trim().toUpperCase() : `EMP • ${companies.length + 1}`,
-      segment: segment ? segment.trim() : 'Atividade Comercial',
+      code: code ? sanitizeString(code, 20).toUpperCase() : `EMP • ${companies.length + 1}`,
+      segment: segment ? sanitizeString(segment, 80) : 'Atividade Comercial',
       icon: icon || '🏢',
-      unitLabel: unitLabel ? unitLabel.trim() : 'Unidades',
+      unitLabel: unitLabel ? sanitizeString(unitLabel, 40) : 'Unidades',
       themeColor: 'amber',
-      description: description ? description.trim() : '',
+      description: description ? sanitizeString(description, 500) : '',
       createdAt: new Date().toISOString(),
     };
 
@@ -684,14 +712,28 @@ export function FarmProvider({ children }) {
       }).then();
     }
 
+    logSecurityEvent('COMPANY_CREATED', {
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      role: currentRole,
+      targetId: newId,
+      details: newComp.name,
+    });
+
     setCurrentCompanyId(newId);
-    return newComp;
+    return { success: true, company: newComp };
   };
 
   const updateCompany = (companyId, updates) => {
     if (currentRole !== 'master') {
-      alert('Acesso restrito: apenas o Administrador Master pode alterar dados estruturais de empresas.');
-      return;
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: `Tentativa não autorizada de alterar empresa ${companyId}`,
+        success: false,
+      });
+      return { success: false, error: 'Acesso restrito: apenas o Administrador Master pode alterar dados estruturais de empresas.' };
     }
     const updated = companies.map((c) => (c.id === companyId ? { ...c, ...updates } : c));
     setCompanies(updated);
@@ -702,16 +744,22 @@ export function FarmProvider({ children }) {
         updated_at: new Date().toISOString(),
       }).then();
     }
+    return { success: true };
   };
 
   const deleteCompany = (companyId) => {
     if (currentRole !== 'master') {
-      alert('Acesso restrito: apenas o Administrador Master pode excluir empresas.');
-      return false;
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: `Tentativa não autorizada de excluir empresa ${companyId}`,
+        success: false,
+      });
+      return { success: false, error: 'Acesso restrito: apenas o Administrador Master pode excluir empresas.' };
     }
     if (companyId === 'comp-fazenda') {
-      alert('A Fazenda Pantaneiros é a matriz principal e não pode ser excluída.');
-      return false;
+      return { success: false, error: 'A Fazenda Pantaneiros é a matriz principal e não pode ser excluída.' };
     }
     const updated = companies.filter((c) => c.id !== companyId);
     setCompanies(updated);
@@ -725,7 +773,7 @@ export function FarmProvider({ children }) {
         updated_at: new Date().toISOString(),
       }).then();
     }
-    return true;
+    return { success: true };
   };
 
   // Scoped Data by Active Company
@@ -884,8 +932,26 @@ export function FarmProvider({ children }) {
   // --- Actions ---
 
   const addTransaction = ({ type, amount, memberId, category, description, date, companyId }) => {
-    const numAmount = Number(amount);
-    const member = members.find((m) => m.id === memberId) || currentUser;
+    if (!isAuthenticated || !currentUser) {
+      return { success: false, error: 'Acesso negado: faça login para realizar transações.' };
+    }
+
+    const numAmount = sanitizePositiveNumber(amount, 0);
+    if (numAmount <= 0) {
+      return { success: false, error: 'Valor da transação deve ser um número positivo maior que zero.' };
+    }
+
+    // RBAC: Only manager, owner, master can record expenses
+    if (type === 'expense' && !hasPermission(currentRole, 'ADD_EXPENSE')) {
+      return { success: false, error: 'Acesso negado: apenas Gerentes ou Donos podem registrar despesas.' };
+    }
+
+    // Regular members can only record income for themselves
+    const canAssignToOthers = hasPermission(currentRole, 'ADD_EXPENSE');
+    const member = canAssignToOthers
+      ? (members.find((m) => m.id === memberId) || currentUser)
+      : currentUser;
+
     const txDate = date || new Date().toISOString();
     const activeCompId = companyId || currentCompanyId || 'comp-fazenda';
 
@@ -899,8 +965,8 @@ export function FarmProvider({ children }) {
       amount: numAmount,
       memberId: member.id,
       memberName: member.name,
-      category: category || (type === 'income' ? 'Adição ao Caixa' : 'Despesa'),
-      description: description || '',
+      category: sanitizeString(category, 80) || (type === 'income' ? 'Adição ao Caixa' : 'Despesa'),
+      description: sanitizeString(description, 500) || '',
       date: txDate,
       boxBalanceAfter: newBalance,
     };
@@ -968,30 +1034,66 @@ export function FarmProvider({ children }) {
       }).catch((err) => console.error('Erro ao enviar log para o Discord:', err));
     }
 
-    return { newTx, formattedReport };
+    return { success: true, newTx, formattedReport };
   };
 
   const deleteTransaction = (id) => {
+    if (!hasPermission(currentRole, 'DELETE_TRANSACTION')) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: `Tentativa não autorizada de excluir transação ${id}`,
+        success: false,
+      });
+      return { success: false, error: 'Acesso negado: apenas Donos ou Administrador Master podem excluir lançamentos.' };
+    }
+
+    logSecurityEvent('TRANSACTION_DELETE', {
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      role: currentRole,
+      targetId: id,
+    });
+
     setTransactions((prev) => prev.filter((tx) => tx.id !== id));
     if (supabase) {
       supabase.from('transactions').delete().eq('id', id).then();
     }
+    return { success: true };
   };
 
   // Deliveries Workflow (Member informs, Manager confirms)
   const submitDelivery = ({ goalId, quantity, managerId, notes, companyId }) => {
-    const qty = Number(quantity);
+    if (!isAuthenticated || !currentUser) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        role: currentRole,
+        details: 'Tentativa não autenticada de submeter entrega',
+        success: false,
+      });
+      return { success: false, error: 'Acesso negado: faça login para registrar entregas.' };
+    }
+
+    const qty = sanitizePositiveNumber(quantity, 0);
+    if (qty <= 0) {
+      return { success: false, error: 'A quantidade de entrega deve ser maior que zero.' };
+    }
+
     const activeCompId = companyId || currentCompanyId || 'comp-fazenda';
     const goal = goals.find((g) => g.id === goalId);
     const manager = members.find((m) => m.id === managerId) || members.find((m) => m.role === 'manager');
 
+    // Force member identity to authenticated currentUser to avoid IDOR spoofing
+    const memberId = currentUser.id;
+    const memberName = currentUser.name || 'Membro';
+
     const newDelivery = {
-      id: `deliv-${Date.now()}`,
+      id: `deliv-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       companyId: activeCompId,
       goalId: goal?.id || null,
       goalTitle: goal?.title || `Entrega Avulsa de ${currentCompany?.unitLabel || 'Produção'}`,
-      memberId: currentUser?.id || 'mem-raquel',
-      memberName: currentUser?.name || 'Membro',
+      memberId,
+      memberName,
       managerId: manager?.id || '',
       managerName: manager?.name || 'Gerente',
       itemType: goal?.unitLabel || currentCompany?.unitLabel || 'Unidades',
@@ -999,8 +1101,15 @@ export function FarmProvider({ children }) {
       status: 'pending',
       submittedAt: new Date().toISOString(),
       confirmedAt: null,
-      notes: notes || '',
+      notes: notes ? sanitizeString(notes, 500) : '',
     };
+
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.DELIVERIES);
+      const prev = saved ? JSON.parse(saved) : deliveries;
+      const updated = [newDelivery, ...(Array.isArray(prev) ? prev : [])];
+      localStorage.setItem(STORAGE_KEYS.DELIVERIES, JSON.stringify(updated));
+    } catch (_) {}
 
     setDeliveries((prev) => [newDelivery, ...prev]);
 
@@ -1009,6 +1118,14 @@ export function FarmProvider({ children }) {
         if (error) console.warn('Aviso ao sincronizar entrega com Supabase:', error.message);
       });
     }
+
+    logSecurityEvent('DELIVERY_SUBMITTED', {
+      userId: currentUser.id,
+      userName: currentUser.name,
+      role: currentRole,
+      targetId: newDelivery.id,
+      details: `${qty}x ${newDelivery.itemType}`,
+    });
 
     const discordMessage = generateDeliverySubmissionDiscordMessage({
       memberName: currentUser?.name || 'Membro',
@@ -1036,17 +1153,61 @@ export function FarmProvider({ children }) {
       }).catch((err) => console.error('Erro ao enviar log para o Discord:', err));
     }
 
-    return { newDelivery, discordMessage };
+    return { success: true, newDelivery, discordMessage };
   };
 
   const confirmDelivery = (deliveryId) => {
-    const delivery = deliveries.find((d) => d.id === deliveryId);
-    if (!delivery) return null;
+    if (!hasPermission(currentRole, 'VALIDATE_DELIVERIES')) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: `Tentativa não autorizada de confirmar entrega ${deliveryId}`,
+        success: false,
+      });
+      return { success: false, error: 'Acesso negado: apenas Gerentes ou Donos podem validar entregas.' };
+    }
+
+    let currentList = deliveries;
+    try {
+      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.DELIVERIES) : null;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) currentList = parsed;
+      }
+    } catch (_) {}
+
+    const delivery = currentList.find((d) => d.id === deliveryId) || deliveries.find((d) => d.id === deliveryId);
+    if (!delivery) return { success: false, error: 'Entrega não encontrada.' };
+
+    // Prevent double-counting / replay attacks
+    if (delivery.status === 'confirmed') {
+      return { success: false, error: 'Esta entrega já foi confirmada anteriormente.' };
+    }
+    if (delivery.status === 'rejected') {
+      return { success: false, error: 'Esta entrega foi rejeitada e não pode ser confirmada.' };
+    }
 
     const confirmedAt = new Date().toISOString();
     const qty = Number(delivery.quantity);
 
     // 1. Update delivery status
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.DELIVERIES);
+      const prev = saved ? JSON.parse(saved) : deliveries;
+      const updated = (Array.isArray(prev) ? prev : deliveries).map((d) =>
+        d.id === deliveryId
+          ? {
+              ...d,
+              status: 'confirmed',
+              confirmedAt,
+              confirmedBy: currentUser?.name || 'Gerência',
+            }
+          : d
+      );
+      localStorage.setItem(STORAGE_KEYS.DELIVERIES, JSON.stringify(updated));
+    } catch (_) {}
+
     setDeliveries((prev) =>
       prev.map((d) =>
         d.id === deliveryId
@@ -1095,6 +1256,14 @@ export function FarmProvider({ children }) {
       }
     }
 
+    logSecurityEvent('DELIVERY_CONFIRMED', {
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      role: currentRole,
+      targetId: deliveryId,
+      details: `${qty}x ${delivery.itemType} de ${delivery.memberName}`,
+    });
+
     const discordConfirmation = generateDeliveryConfirmationDiscordMessage({
       memberName: delivery.memberName,
       managerName: currentUser?.name || 'Gerência',
@@ -1125,18 +1294,65 @@ export function FarmProvider({ children }) {
       }).catch((err) => console.error('Erro ao enviar confirmação para o Discord:', err));
     }
 
-    return { updatedDelivery: delivery, discordConfirmation };
+    return { success: true, updatedDelivery: delivery, discordConfirmation };
   };
 
   const rejectDelivery = ({ deliveryId, reason }) => {
+    if (!hasPermission(currentRole, 'VALIDATE_DELIVERIES')) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: `Tentativa não autorizada de rejeitar entrega ${deliveryId}`,
+        success: false,
+      });
+      return { success: false, error: 'Acesso negado: apenas Gerentes ou Donos podem rejeitar entregas.' };
+    }
+
+    let currentList = deliveries;
+    try {
+      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.DELIVERIES) : null;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) currentList = parsed;
+      }
+    } catch (_) {}
+
+    const delivery = currentList.find((d) => d.id === deliveryId) || deliveries.find((d) => d.id === deliveryId);
+    if (!delivery) return { success: false, error: 'Entrega não encontrada.' };
+
+    if (delivery.status === 'confirmed') {
+      return { success: false, error: 'Esta entrega já foi confirmada e não pode ser rejeitada.' };
+    }
+    if (delivery.status === 'rejected') {
+      return { success: false, error: 'Esta entrega já se encontra rejeitada.' };
+    }
+
     const rejectedAt = new Date().toISOString();
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.DELIVERIES);
+      const prev = saved ? JSON.parse(saved) : deliveries;
+      const updated = (Array.isArray(prev) ? prev : deliveries).map((d) =>
+        d.id === deliveryId
+          ? {
+              ...d,
+              status: 'rejected',
+              rejectionReason: sanitizeString(reason, 255) || 'Não conferido ou incorreto',
+              rejectedBy: currentUser?.name || 'Gerência',
+              rejectedAt,
+            }
+          : d
+      );
+      localStorage.setItem(STORAGE_KEYS.DELIVERIES, JSON.stringify(updated));
+    } catch (_) {}
+
     setDeliveries((prev) =>
       prev.map((d) =>
         d.id === deliveryId
           ? {
               ...d,
               status: 'rejected',
-              rejectionReason: reason || 'Não conferido ou incorreto',
+              rejectionReason: sanitizeString(reason, 255) || 'Não conferido ou incorreto',
               rejectedBy: currentUser?.name || 'Gerência',
               rejectedAt,
             }
@@ -1147,33 +1363,54 @@ export function FarmProvider({ children }) {
     if (supabase) {
       supabase.from('deliveries').update({
         status: 'rejected',
-        rejection_reason: reason || 'Não conferido ou incorreto',
+        rejection_reason: sanitizeString(reason, 255) || 'Não conferido ou incorreto',
         rejected_by: currentUser?.name || 'Gerência',
         rejected_at: rejectedAt,
       }).eq('id', deliveryId).then();
     }
+
+    logSecurityEvent('DELIVERY_REJECTED', {
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      role: currentRole,
+      targetId: deliveryId,
+      details: reason,
+    });
+
+    return { success: true };
   };
 
   const addGoal = ({ title, type, unitType, unitLabel, targetMemberId, targetAmount, deadline, notes, companyId }) => {
+    if (!hasPermission(currentRole, 'MANAGE_GOALS')) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: 'Tentativa não autorizada de criar meta',
+        success: false,
+      });
+      return { success: false, error: 'Acesso negado: apenas Gerentes ou Donos podem criar metas.' };
+    }
+
     const isAll = targetMemberId === 'all';
     const activeCompId = companyId || currentCompanyId || 'comp-fazenda';
     const targetMember = isAll ? null : members.find((m) => m.id === targetMemberId);
     const newGoal = {
       id: `goal-${Date.now()}`,
       companyId: activeCompId,
-      title,
+      title: sanitizeString(title, 120),
       type: type || (currentRole === 'owner' ? 'owner_to_manager' : 'manager_to_member'),
       unitType: unitType || 'sacks', // 'sacks' | 'dols'
-      unitLabel: unitLabel || (unitType === 'dols' ? 'DOLS' : currentCompany?.unitLabel || 'Unidades'),
+      unitLabel: sanitizeString(unitLabel, 40) || (unitType === 'dols' ? 'DOLS' : currentCompany?.unitLabel || 'Unidades'),
       creatorRole: currentRole,
       creatorName: currentUser?.name || 'Liderança',
       targetMemberId: targetMemberId || 'all',
       targetMemberName: isAll ? 'Toda a Equipe (Geral)' : (targetMember?.name || 'Não atribuído'),
-      targetAmount: Number(targetAmount),
+      targetAmount: sanitizePositiveNumber(targetAmount, 0),
       currentAmount: 0,
-      deadline,
+      deadline: sanitizeString(deadline, 50),
       status: 'in_progress',
-      notes: notes || '',
+      notes: sanitizeString(notes, 500) || '',
     };
     setGoals((prev) => [newGoal, ...prev]);
 
@@ -1183,10 +1420,21 @@ export function FarmProvider({ children }) {
       });
     }
 
+    logSecurityEvent('GOAL_CREATED', {
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      role: currentRole,
+      targetId: newGoal.id,
+      details: newGoal.title,
+    });
+
     return newGoal;
   };
 
   const updateGoal = (id, updates) => {
+    if (!hasPermission(currentRole, 'MANAGE_GOALS')) {
+      return { success: false, error: 'Acesso negado: apenas Gerentes ou Donos podem alterar metas.' };
+    }
     setGoals((prev) =>
       prev.map((g) => {
         if (g.id !== id) return g;
@@ -1200,18 +1448,38 @@ export function FarmProvider({ children }) {
         return merged;
       })
     );
+    return { success: true };
   };
 
   const deleteGoal = (id) => {
+    if (!hasPermission(currentRole, 'MANAGE_GOALS')) {
+      return { success: false, error: 'Acesso negado: apenas Gerentes ou Donos podem excluir metas.' };
+    }
     setGoals((prev) => prev.filter((g) => g.id !== id));
     if (supabase) {
       supabase.from('goals').delete().eq('id', id).then();
     }
+    return { success: true };
   };
 
   const addMember = ({ name, role, avatar, passport, phone, pin, companyId }) => {
+    if (!hasPermission(currentRole, 'ADD_MEMBER')) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: 'Tentativa não autorizada de criar nova conta de membro',
+        success: false,
+      });
+      return { success: false, error: 'Acesso negado: apenas Donos ou Administrador Master podem cadastrar novos membros.' };
+    }
+
     const targetCompId = companyId || currentCompanyId || 'comp-fazenda';
     const targetRole = role || 'member';
+    if ((targetRole === 'owner' || targetRole === 'master') && currentRole !== ROLES.MASTER) {
+      return { success: false, error: 'Acesso negado: apenas o Administrador Master pode criar contas de Dono ou Master.' };
+    }
+
     const targetCompanyObj = companies.find((c) => c.id === targetCompId);
     const compName = targetCompanyObj?.name || 'Fazenda';
 
@@ -1224,17 +1492,26 @@ export function FarmProvider({ children }) {
 
     const newMember = {
       id: `mem-${Date.now()}`,
-      name: name.trim(),
+      name: sanitizeString(name, 80),
       role: targetRole,
       roleLabel: getRoleLabel(),
       companyId: targetRole === 'master' ? 'all' : targetCompId,
       avatar: avatar || (targetRole === 'master' ? '⚡' : targetRole === 'owner' ? '👑' : targetRole === 'manager' ? '👔' : '🌾'),
-      passport: passport ? String(passport).trim() : '',
-      phone: phone ? String(phone).trim() : '',
-      pin: pin ? String(pin).trim() : '',
+      passport: passport ? sanitizeString(String(passport), 40) : '',
+      phone: phone ? sanitizeString(String(phone), 40) : '',
+      pin: pin ? sanitizeString(String(pin), 20) : '1234',
       createdAt: new Date().toISOString(),
       active: true,
     };
+
+    logSecurityEvent('MEMBER_CREATE', {
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      role: currentRole,
+      targetId: newMember.id,
+      details: `Novo membro cadastrado: ${newMember.name} (${newMember.role})`,
+    });
+
     setMembers((prev) => [...prev, newMember]);
 
     if (supabase) {
@@ -1247,20 +1524,37 @@ export function FarmProvider({ children }) {
   };
 
   const deleteMember = (id) => {
+    if (!hasPermission(currentRole, 'DELETE_MEMBER')) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: `Tentativa não autorizada de excluir membro ${id}`,
+        success: false,
+      });
+      return { success: false, error: 'Acesso negado: apenas Donos ou Administrador Master podem excluir membros.' };
+    }
+
     const memberToDelete = members.find((m) => m.id === id);
-    if (!memberToDelete) return false;
+    if (!memberToDelete) return { success: false, error: 'Membro não encontrado.' };
     
     // Safety check: Cannot delete Master account
     if (memberToDelete.role === 'master' || memberToDelete.id === 'mem-master') {
-      alert('Não é possível excluir a conta Administrador Master da Holding.');
-      return false;
+      return { success: false, error: 'Não é possível excluir a conta Administrador Master da Holding.' };
     }
 
     // Only Master can delete Owner accounts
-    if (memberToDelete.role === 'owner' && currentRole !== 'master') {
-      alert('Apenas o Administrador Master pode excluir contas de Donos.');
-      return false;
+    if (memberToDelete.role === 'owner' && currentRole !== ROLES.MASTER) {
+      return { success: false, error: 'Apenas o Administrador Master pode excluir contas de Donos.' };
     }
+
+    logSecurityEvent('MEMBER_DELETE', {
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      role: currentRole,
+      targetId: id,
+      details: `Conta excluída: ${memberToDelete.name} (${memberToDelete.role})`,
+    });
 
     setMembers((prev) => prev.filter((m) => m.id !== id));
 
@@ -1268,39 +1562,96 @@ export function FarmProvider({ children }) {
       supabase.from('members').delete().eq('id', id).then();
     }
 
-    // If currently logged in as this user, fallback to the owner or first member
+    // If currently logged in as this user, logout immediately
     if (currentUserId === id) {
-      const remaining = members.filter((m) => m.id !== id);
-      if (remaining.length > 0) {
-        setCurrentUserId(remaining[0].id);
-      }
+      logout('user');
     }
-    return true;
+    return { success: true };
   };
 
-  const updateMember = (id, updates) => {
+  const updateMember = (id, updates = {}) => {
+    const target = members.find((m) => m.id === id);
+    if (!target) return { success: false, error: 'Membro não encontrado.' };
+
+    const isSelf = currentUser && currentUser.id === id;
+    const isMaster = currentRole === ROLES.MASTER;
+    const isOwner = currentRole === ROLES.OWNER;
+
+    if (!isSelf && !isOwner && !isMaster) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: `Tentativa não autorizada de editar membro ${id}`,
+        success: false,
+      });
+      return { success: false, error: 'Acesso negado: você não tem permissão para alterar outros usuários.' };
+    }
+
+    // Privilege Escalation Prevention:
+    // Non-master users CANNOT elevate roles or change assignments arbitrarily
+    const safeUpdates = { ...updates };
+    if (!isMaster) {
+      delete safeUpdates.role;
+      if (!isOwner) {
+        delete safeUpdates.companyId;
+      }
+    }
+
+    if (isOwner && !isMaster) {
+      if (safeUpdates.role === 'owner' || safeUpdates.role === 'master') {
+        delete safeUpdates.role;
+      }
+    }
+
+    // Sanitize string inputs
+    if (safeUpdates.name) safeUpdates.name = sanitizeString(safeUpdates.name, 80);
+    if (safeUpdates.passport) safeUpdates.passport = sanitizeString(String(safeUpdates.passport), 40);
+    if (safeUpdates.phone) safeUpdates.phone = sanitizeString(String(safeUpdates.phone), 40);
+    if (safeUpdates.pin) safeUpdates.pin = sanitizeString(String(safeUpdates.pin), 20);
+
+    logSecurityEvent('MEMBER_UPDATE', {
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      role: currentRole,
+      targetId: id,
+      details: `Campos atualizados: ${Object.keys(safeUpdates).join(', ')}`,
+    });
+
     setMembers((prev) =>
       prev.map((m) => {
         if (m.id !== id) return m;
-        const merged = { ...m, ...updates };
+        const merged = { ...m, ...safeUpdates };
         if (supabase) {
           supabase.from('members').update(toDbMember(merged)).eq('id', id).then();
         }
         return merged;
       })
     );
+    return { success: true };
   };
 
   const closeFinancialCycle = ({ title, periodNote, companyId } = {}) => {
+    if (!hasPermission(currentRole, 'CLOSE_CYCLE')) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: 'Tentativa não autorizada de fechar ciclo financeiro',
+        success: false,
+      });
+      return { success: false, error: 'Acesso negado: apenas Donos ou Administrador Master podem fechar ciclos financeiros.' };
+    }
+
     const cycleCompId = companyId || currentCompanyId || 'comp-fazenda';
     const cycleCompany = companies.find((c) => c.id === cycleCompId) || currentCompany;
 
     const cycleRecord = {
       id: `cycle-${Date.now()}`,
       companyId: cycleCompId,
-      title: title || `Fechamento ${new Date().toLocaleDateString('pt-BR')}`,
+      title: sanitizeString(title, 100) || `Fechamento ${new Date().toLocaleDateString('pt-BR')}`,
       date: new Date().toISOString(),
-      periodNote: periodNote || '',
+      periodNote: sanitizeString(periodNote, 500) || '',
       closedBy: currentUser?.name || 'Liderança',
       totalIncome,
       totalExpense,
@@ -1318,6 +1669,14 @@ export function FarmProvider({ children }) {
       managersPoolAmount,
       membersPoolAmount,
     };
+
+    logSecurityEvent('CYCLE_CLOSED', {
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      role: currentRole,
+      targetId: cycleRecord.id,
+      details: cycleRecord.title,
+    });
 
     setClosedCycles((prev) => [cycleRecord, ...prev]);
 
@@ -1350,6 +1709,17 @@ export function FarmProvider({ children }) {
   };
 
   const updateDiscordSettings = async (newSettings, targetCompanyId) => {
+    if (!hasPermission(currentRole, 'MANAGE_DISCORD_SETTINGS')) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: 'Tentativa não autorizada de alterar webhook do Discord',
+        success: false,
+      });
+      throw new Error('Acesso negado: apenas Donos ou Administrador Master podem alterar configurações de Discord.');
+    }
+
     const cId = targetCompanyId || currentCompanyId || 'comp-fazenda';
     const existingComp = discordSettings?.byCompany?.[cId] || {};
     const updatedComp = {
@@ -1376,8 +1746,18 @@ export function FarmProvider({ children }) {
       merged.autoPayroll = updatedComp.autoPayroll ?? merged.autoPayroll;
     }
 
+    logSecurityEvent('DISCORD_SETTINGS_UPDATED', {
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      role: currentRole,
+      details: `Configuração atualizada para empresa: ${cId}`,
+    });
+
     setDiscordSettings(merged);
-    localStorage.setItem(STORAGE_KEYS.DISCORD, JSON.stringify(merged));
+    try {
+      localStorage.setItem(STORAGE_KEYS.DISCORD, JSON.stringify(merged));
+    } catch (_) {}
+
     if (supabase) {
       const { error } = await supabase.from('farm_settings').upsert({
         key: 'discord',
@@ -1393,17 +1773,42 @@ export function FarmProvider({ children }) {
   };
 
   const updateSplitSettings = (newSettings) => {
+    if (!hasPermission(currentRole, 'MANAGE_PROFIT_SPLIT')) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: 'Tentativa não autorizada de alterar divisão de lucros',
+        success: false,
+      });
+      return { success: false, error: 'Acesso negado: apenas Donos ou Administrador Master podem alterar divisão de lucros.' };
+    }
+
+    logSecurityEvent('SPLIT_SETTINGS_UPDATED', {
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      role: currentRole,
+      details: `Novas regras: ${JSON.stringify(newSettings)}`,
+    });
+
     setSplitSettings(newSettings);
     if (supabase) {
       supabase.from('farm_settings').upsert({ key: 'split', value: newSettings, updated_at: new Date().toISOString() }).then();
     }
+    return { success: true };
   };
 
   // --- Rotas & Missões com Checklist (Fazenda, Ferrovia, Taverna) ---
 
   const startRoute = (routeId) => {
+    if (!isAuthenticated || !currentUser) {
+      return { success: false, error: 'Acesso negado: faça login para iniciar rotas.' };
+    }
     const route = routes.find((r) => r.id === routeId);
-    if (!route) return;
+    if (!route) return { success: false, error: 'Rota não encontrada.' };
+    if (route.status === 'in_progress') {
+      return { success: false, error: 'Esta rota já está em andamento.' };
+    }
 
     const startedAt = new Date().toISOString();
     const startedBy = currentUser?.name || 'Membro';
@@ -1442,9 +1847,13 @@ export function FarmProvider({ children }) {
         deletePrevious: startRouteDiscord.autoDeletePrevious ?? true,
       }).catch((e) => console.error('Erro ao enviar log de rota para Discord:', e));
     }
+    return { success: true };
   };
 
   const updateRouteItem = (routeId, itemId, { addQuantity, setQuantity, markCompleted } = {}) => {
+    if (!isAuthenticated || !currentUser) {
+      return { success: false, error: 'Acesso negado: faça login para atualizar itens de rotas.' };
+    }
     let updatedItem = null;
     let targetRoute = null;
 
@@ -1522,11 +1931,18 @@ export function FarmProvider({ children }) {
         }).catch((e) => console.error('Erro ao enviar progresso da rota para Discord:', e));
       }
     }
+    return { success: true };
   };
 
   const completeRoute = (routeId, { creditToBox = true } = {}) => {
+    if (!isAuthenticated || !currentUser) {
+      return { success: false, error: 'Acesso negado: faça login para concluir rotas.' };
+    }
     const route = routes.find((r) => r.id === routeId);
-    if (!route) return;
+    if (!route) return { success: false, error: 'Rota não encontrada.' };
+    if (route.status === 'completed') {
+      return { success: false, error: 'Esta rota já foi concluída anteriormente.' };
+    }
 
     const completedAt = new Date().toISOString();
     const completedBy = currentUser?.name || 'Membro';
@@ -1580,11 +1996,18 @@ export function FarmProvider({ children }) {
         deletePrevious: compRouteDiscord.autoDeletePrevious ?? true,
       }).catch((e) => console.error('Erro ao enviar conclusão da rota para Discord:', e));
     }
+    return { success: true };
   };
 
   const resetRoute = (routeId) => {
+    if (!isAuthenticated || !currentUser) {
+      return { success: false, error: 'Acesso negado: faça login para reiniciar rotas.' };
+    }
+    if (!hasPermission(currentRole, 'VALIDATE_DELIVERIES')) {
+      return { success: false, error: 'Acesso negado: apenas Gerentes ou Donos podem reiniciar o estoque de rotas.' };
+    }
     const route = routes.find((r) => r.id === routeId);
-    if (!route) return;
+    if (!route) return { success: false, error: 'Rota não encontrada.' };
 
     const resetItems = (route.items || []).map((it) => ({
       ...it,
@@ -1615,17 +2038,29 @@ export function FarmProvider({ children }) {
         updated_at: new Date().toISOString(),
       }).then();
     }
+    return { success: true };
   };
 
   const addCustomRoute = (newRoute) => {
+    if (!hasPermission(currentRole, 'MANAGE_GOALS')) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: 'Tentativa não autorizada de criar nova rota',
+        success: false,
+      });
+      return { success: false, error: 'Acesso negado: apenas Gerentes ou Donos podem criar rotas customizadas.' };
+    }
+
     const id = `route-${Date.now()}`;
     const routeObj = {
       id,
       companyId: newRoute.companyId || currentCompanyId || 'comp-fazenda',
-      title: newRoute.title || 'Nova Rota',
-      rewardAmount: Number(newRoute.rewardAmount) || 0,
+      title: sanitizeString(newRoute.title, 100) || 'Nova Rota',
+      rewardAmount: sanitizePositiveNumber(newRoute.rewardAmount, 0),
       icon: newRoute.icon || '📦',
-      description: newRoute.description || '',
+      description: sanitizeString(newRoute.description, 500) || '',
       status: 'in_progress',
       startedBy: currentUser?.name || 'Membro',
       startedAt: new Date().toISOString(),
@@ -1657,18 +2092,29 @@ export function FarmProvider({ children }) {
       }).catch((e) => console.error(e));
     }
 
-    return routeObj;
+    return { success: true, route: routeObj };
   };
 
   const updateCustomRoute = (routeId, updatedData) => {
+    if (!hasPermission(currentRole, 'MANAGE_GOALS')) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: `Tentativa não autorizada de atualizar rota ${routeId}`,
+        success: false,
+      });
+      return { success: false, error: 'Acesso negado: apenas Gerentes ou Donos podem editar rotas.' };
+    }
+
     const updated = routes.map((r) => {
       if (r.id !== routeId) return r;
       return {
         ...r,
-        title: updatedData.title !== undefined ? updatedData.title : r.title,
-        rewardAmount: updatedData.rewardAmount !== undefined ? Number(updatedData.rewardAmount) : r.rewardAmount,
+        title: updatedData.title !== undefined ? sanitizeString(updatedData.title, 100) : r.title,
+        rewardAmount: updatedData.rewardAmount !== undefined ? sanitizePositiveNumber(updatedData.rewardAmount, 0) : r.rewardAmount,
         icon: updatedData.icon !== undefined ? updatedData.icon : r.icon,
-        description: updatedData.description !== undefined ? updatedData.description : r.description,
+        description: updatedData.description !== undefined ? sanitizeString(updatedData.description, 500) : r.description,
         companyId: updatedData.companyId !== undefined ? updatedData.companyId : r.companyId,
         items: updatedData.items !== undefined ? updatedData.items : r.items,
         updatedAt: new Date().toISOString(),
@@ -1684,9 +2130,21 @@ export function FarmProvider({ children }) {
         updated_at: new Date().toISOString(),
       }).then();
     }
+    return { success: true };
   };
 
   const deleteCustomRoute = (routeId) => {
+    if (!hasPermission(currentRole, 'MANAGE_GOALS')) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: `Tentativa não autorizada de excluir rota ${routeId}`,
+        success: false,
+      });
+      return { success: false, error: 'Acesso negado: apenas Gerentes ou Donos podem excluir rotas.' };
+    }
+
     const updated = routes.filter((r) => r.id !== routeId);
     setRoutes(updated);
 
@@ -1697,10 +2155,14 @@ export function FarmProvider({ children }) {
         updated_at: new Date().toISOString(),
       }).then();
     }
+    return { success: true };
   };
 
 
   const dispatchRouteBatch = (routeId, batchCount = 1) => {
+    if (!isAuthenticated || !currentUser) {
+      return { success: false, message: 'Acesso negado: faça login para despachar rotas.' };
+    }
     const route = routes.find((r) => r.id === routeId);
     if (!route) return { success: false, message: 'Rota não encontrada.' };
 
@@ -1908,6 +2370,7 @@ export function FarmProvider({ children }) {
         login,
         logout,
         minutesRemaining,
+        getAuditLogs,
         // Database & Realtime Status
         dbStatus,
         dbError,

@@ -107,24 +107,93 @@ ALTER TABLE public.deliveries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.closed_cycles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.farm_settings ENABLE ROW LEVEL SECURITY;
 
--- POLÍTICAS DE ACESSO TOTAL PÚBLICO (ANON COM PIN NA APLICAÇÃO)
+-- 1. MEMBERS: Leitura pública das contas ativas; Modificações restritas
 DROP POLICY IF EXISTS "Allow all on members" ON public.members;
-CREATE POLICY "Allow all on members" ON public.members FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Public read on members" ON public.members;
+DROP POLICY IF EXISTS "Allow member self update" ON public.members;
+DROP POLICY IF EXISTS "Allow member insert" ON public.members;
+DROP POLICY IF EXISTS "Allow member update" ON public.members;
 
+-- Leitura pública dos integrantes para identificação no sistema
+CREATE POLICY "Public read on members" ON public.members 
+  FOR SELECT USING (active = true);
+
+-- Inserção de novos membros (controlada pela aplicação e service_role)
+CREATE POLICY "Allow member insert" ON public.members 
+  FOR INSERT WITH CHECK (name IS NOT NULL AND length(trim(name)) > 0);
+
+-- Atualização de membros
+CREATE POLICY "Allow member update" ON public.members 
+  FOR UPDATE USING (true) WITH CHECK (name IS NOT NULL);
+
+-- 2. TRANSACTIONS: Leitura pública do extrato; Inserção de lançamentos válidos; Exclusão restrita
 DROP POLICY IF EXISTS "Allow all on transactions" ON public.transactions;
-CREATE POLICY "Allow all on transactions" ON public.transactions FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Public read on transactions" ON public.transactions;
+DROP POLICY IF EXISTS "Allow transaction insert" ON public.transactions;
+DROP POLICY IF EXISTS "Allow transaction update" ON public.transactions;
+DROP POLICY IF EXISTS "Allow transaction delete" ON public.transactions;
 
+CREATE POLICY "Public read on transactions" ON public.transactions 
+  FOR SELECT USING (true);
+
+-- Permite adicionar lançamentos apenas com valores positivos
+CREATE POLICY "Allow transaction insert" ON public.transactions 
+  FOR INSERT WITH CHECK (amount > 0 AND (type = 'income' OR type = 'expense'));
+
+-- 3. GOALS: Leitura pública; Criação e atualização de metas
 DROP POLICY IF EXISTS "Allow all on goals" ON public.goals;
-CREATE POLICY "Allow all on goals" ON public.goals FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Public read on goals" ON public.goals;
+DROP POLICY IF EXISTS "Allow goal insert" ON public.goals;
+DROP POLICY IF EXISTS "Allow goal update" ON public.goals;
+DROP POLICY IF EXISTS "Allow goal delete" ON public.goals;
 
+CREATE POLICY "Public read on goals" ON public.goals 
+  FOR SELECT USING (true);
+
+CREATE POLICY "Allow goal insert" ON public.goals 
+  FOR INSERT WITH CHECK (title IS NOT NULL AND target_amount >= 0);
+
+CREATE POLICY "Allow goal update" ON public.goals 
+  FOR UPDATE USING (true) WITH CHECK (current_amount >= 0);
+
+-- 4. DELIVERIES: Leitura pública; Inserção com quantidade positiva; Atualização de status
 DROP POLICY IF EXISTS "Allow all on deliveries" ON public.deliveries;
-CREATE POLICY "Allow all on deliveries" ON public.deliveries FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Public read on deliveries" ON public.deliveries;
+DROP POLICY IF EXISTS "Allow delivery insert" ON public.deliveries;
+DROP POLICY IF EXISTS "Allow delivery update" ON public.deliveries;
+DROP POLICY IF EXISTS "Allow delivery delete" ON public.deliveries;
 
+CREATE POLICY "Public read on deliveries" ON public.deliveries 
+  FOR SELECT USING (true);
+
+CREATE POLICY "Allow delivery insert" ON public.deliveries 
+  FOR INSERT WITH CHECK (quantity > 0);
+
+CREATE POLICY "Allow delivery update" ON public.deliveries 
+  FOR UPDATE USING (true) WITH CHECK (status IN ('pending', 'confirmed', 'rejected'));
+
+-- 5. CLOSED CYCLES: Leitura pública do histórico de fechamento; Inserção permitida; Exclusão bloqueada
 DROP POLICY IF EXISTS "Allow all on closed_cycles" ON public.closed_cycles;
-CREATE POLICY "Allow all on closed_cycles" ON public.closed_cycles FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Public read on closed_cycles" ON public.closed_cycles;
+DROP POLICY IF EXISTS "Allow cycle insert" ON public.closed_cycles;
 
+CREATE POLICY "Public read on closed_cycles" ON public.closed_cycles 
+  FOR SELECT USING (true);
+
+CREATE POLICY "Allow cycle insert" ON public.closed_cycles 
+  FOR INSERT WITH CHECK (total_income >= 0);
+
+-- 6. FARM SETTINGS: Leitura pública; Atualização controlada
 DROP POLICY IF EXISTS "Allow all on farm_settings" ON public.farm_settings;
-CREATE POLICY "Allow all on farm_settings" ON public.farm_settings FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Public read on farm_settings" ON public.farm_settings;
+DROP POLICY IF EXISTS "Allow settings upsert" ON public.farm_settings;
+
+CREATE POLICY "Public read on farm_settings" ON public.farm_settings 
+  FOR SELECT USING (true);
+
+CREATE POLICY "Allow settings upsert" ON public.farm_settings 
+  FOR ALL USING (key IN ('split', 'discord', 'companies', 'routes')) 
+  WITH CHECK (key IN ('split', 'discord', 'companies', 'routes'));
 
 -- =========================================================
 -- HABILITAR SINCRONIZAÇÃO EM TEMPO REAL (REALTIME WEBSOCKETS)
@@ -139,12 +208,15 @@ BEGIN
 
   FOREACH t IN ARRAY ARRAY['members', 'transactions', 'goals', 'deliveries', 'closed_cycles', 'farm_settings']
   LOOP
-    BEGIN
+    IF NOT EXISTS (
+      SELECT 1 
+      FROM pg_publication_rel pr
+      JOIN pg_class c ON pr.prrelid = c.oid
+      JOIN pg_publication p ON pr.prpubid = p.oid
+      WHERE p.pubname = 'supabase_realtime' AND c.relname = t
+    ) THEN
       EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I;', t);
-    EXCEPTION
-      WHEN duplicate_object THEN
-        NULL;
-    END;
+    END IF;
   END LOOP;
 END $$;
 
