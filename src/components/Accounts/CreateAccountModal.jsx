@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useFarm } from '../../context/FarmContext';
-import { X, UserPlus, Shield, Wheat, Briefcase, Sparkles, Key } from 'lucide-react';
+import { X, UserPlus, Shield, Wheat, Briefcase, Sparkles, Key, Check, Copy, Clock, ShieldCheck, ExternalLink } from 'lucide-react';
 
 export function CreateAccountModal({ isOpen, onClose }) {
   const { addMember, companies, currentCompanyId, currentCompany, currentRole } = useFarm();
@@ -14,7 +14,20 @@ export function CreateAccountModal({ isOpen, onClose }) {
   const [pin, setPin] = useState('');
   const [avatar, setAvatar] = useState('🌾');
 
+  const [createdInvite, setCreatedInvite] = useState(null);
+  const [copied, setCopied] = useState(false);
+
   if (!isOpen) return null;
+
+  const handleClose = () => {
+    setName('');
+    setPassport('');
+    setPhone('');
+    setPin('');
+    setCreatedInvite(null);
+    setCopied(false);
+    onClose();
+  };
 
   const handleRoleChange = (newRole) => {
     setRole(newRole);
@@ -34,22 +47,36 @@ export function CreateAccountModal({ isOpen, onClose }) {
       return;
     }
 
-    addMember({
+    const res = addMember({
       name: name.trim(),
       role,
       avatar,
       passport: passport.trim(),
       phone: phone.trim(),
-      pin: pin.trim(),
+      pin: pin.trim() || '1234',
       companyId: isMaster ? companyId : (currentCompany?.id || currentCompanyId || 'comp-fazenda'),
     });
 
-    // Reset and close
-    setName('');
-    setPassport('');
-    setPhone('');
-    setPin('');
-    onClose();
+    if (res && res.inviteToken) {
+      setCreatedInvite({
+        name: name.trim(),
+        role,
+        inviteToken: res.inviteToken,
+        inviteExpiresAt: res.inviteExpiresAt,
+      });
+      return;
+    }
+
+    handleClose();
+  };
+
+  const handleCopy = () => {
+    if (!createdInvite?.inviteToken) return;
+    const url = `${window.location.origin}/?convite=${createdInvite.inviteToken}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    });
   };
 
   return (
@@ -68,14 +95,73 @@ export function CreateAccountModal({ isOpen, onClose }) {
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-stone-400 hover:text-stone-700 p-1.5 rounded-xl hover:bg-stone-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        {createdInvite ? (
+          <div className="p-6 space-y-5 animate-fadeIn">
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-2">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                <Check className="w-6 h-6 stroke-[3]" />
+              </div>
+              <h4 className="text-base font-bold text-emerald-950">Conta Criada com Sucesso!</h4>
+              <p className="text-xs text-emerald-800">
+                O integrante <strong>{createdInvite.name}</strong> foi cadastrado. Agora envie o Link de Primeiro Acesso para ele definir seu PIN pessoal.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-stone-700">
+                Link de Convite & Primeiro Acesso (Uso Único • 24 Horas):
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={`${typeof window !== 'undefined' ? window.location.origin : ''}/?convite=${createdInvite.inviteToken}`}
+                  className="flex-1 bg-stone-50 border border-stone-300 rounded-xl px-3.5 py-2.5 text-xs text-stone-800 font-mono select-all outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm ${
+                    copied
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-stone-900 hover:bg-stone-800 text-white'
+                  }`}
+                >
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  <span>{copied ? 'Copiado!' : 'Copiar'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold">
+                <Clock className="w-4 h-4 text-amber-600" />
+                <span>Instruções de Segurança:</span>
+              </div>
+              <ul className="list-disc list-inside space-y-0.5 text-amber-800 pl-1 text-[11px]">
+                <li>O link possui validade de 24 horas e se expira após o primeiro uso.</li>
+                <li>Ao abrir o link, o membro definirá sua senha pessoal de 4 a 8 dígitos.</li>
+                <li>Caso expire, você poderá gerar um novo link a qualquer momento no Painel de Integrantes.</li>
+              </ul>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleClose}
+              className="w-full py-3 rounded-xl bg-pantanal-700 hover:bg-pantanal-800 text-white font-bold text-xs transition-colors shadow-sm"
+            >
+              Concluir e Fechar
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
           
           {/* Company Target Selector */}
           {isMaster ? (
@@ -226,66 +312,60 @@ export function CreateAccountModal({ isOpen, onClose }) {
             </div>
           </div>
 
-          {/* PIN / Senha de Acesso */}
-          <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-1">
-              Senha / PIN de Acesso (4 dígitos):
-            </label>
-            <input
-              type="password"
-              maxLength={8}
-              placeholder="Padrão: 1234"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3.5 py-2.5 text-xs text-stone-900 focus:bg-white focus:border-amber-400 outline-none transition-colors font-mono"
-            />
-            <p className="text-[10px] text-stone-500 mt-1">
-              Se deixar vazio, o PIN padrão será <strong>1234</strong>.
-            </p>
-          </div>
-
-          {/* Avatar Icon Selector */}
-          <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-1.5">
-              Escolha o Avatar / Símbolo:
-            </label>
-            <div className="flex items-center gap-2 flex-wrap">
-              {['🌾', '🚜', '🤠', '🐎', '🌱', '👔', '💼', '🐂', '🌽'].map((icon) => (
-                <button
-                  key={icon}
-                  type="button"
-                  onClick={() => setAvatar(icon)}
-                  className={`w-10 h-10 rounded-2xl border flex items-center justify-center text-xl transition-all ${
-                    avatar === icon
-                      ? 'border-ouro-500 bg-amber-50 shadow-sm ring-2 ring-ouro-400/40'
-                      : 'border-stone-200 bg-stone-50 hover:bg-stone-100'
-                  }`}
-                >
-                  {icon}
-                </button>
-              ))}
+            {/* Primeiro Acesso e Senha */}
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-stone-700 space-y-1.5">
+              <div className="flex items-center gap-2 font-bold text-stone-900">
+                <Key className="w-4 h-4 text-amber-600" />
+                <span>Primeiro Acesso Protegido (24 Horas)</span>
+              </div>
+              <p className="text-[11px] text-stone-600 leading-relaxed">
+                Não é necessário criar uma senha temporária. Ao confirmar o cadastro, o sistema gerará um <strong>Link de Convite Criptográfico Único</strong> para o próprio integrante definir seu PIN pessoal com total segurança.
+              </p>
             </div>
-          </div>
 
-          {/* Submit buttons */}
-          <div className="flex gap-3 pt-3 border-t border-stone-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="py-2.5 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-xs transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="flex-1 py-2.5 px-4 rounded-xl bg-pantanal-700 hover:bg-pantanal-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all transform hover:-translate-y-0.5"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Confirmar Criação da Conta</span>
-            </button>
-          </div>
+            {/* Avatar Icon Selector */}
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                Escolha o Avatar / Símbolo:
+              </label>
+              <div className="flex items-center gap-2 flex-wrap">
+                {['🌾', '🚜', '🤠', '🐎', '🌱', '👔', '💼', '🐂', '🌽'].map((icon) => (
+                  <button
+                    key={icon}
+                    type="button"
+                    onClick={() => setAvatar(icon)}
+                    className={`w-10 h-10 rounded-2xl border flex items-center justify-center text-xl transition-all ${
+                      avatar === icon
+                        ? 'border-ouro-500 bg-amber-50 shadow-sm ring-2 ring-ouro-400/40'
+                        : 'border-stone-200 bg-stone-50 hover:bg-stone-100'
+                    }`}
+                  >
+                    {icon}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        </form>
+            {/* Submit buttons */}
+            <div className="flex gap-3 pt-3 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="py-2.5 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-xs transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2.5 px-4 rounded-xl bg-pantanal-700 hover:bg-pantanal-800 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all transform hover:-translate-y-0.5"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Confirmar e Gerar Link de Convite</span>
+              </button>
+            </div>
+
+          </form>
+        )}
 
       </div>
     </div>

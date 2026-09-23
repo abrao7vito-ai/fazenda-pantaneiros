@@ -85,13 +85,23 @@ export function RouteChecklistManager() {
     dbStatus
   } = useFarm();
 
-  const [companyFilter, setCompanyFilter] = useState('all'); // 'all' | 'comp-fazenda' | 'comp-ferrovia' | 'comp-taverna'
+  const isMaster = currentRole === 'master';
+  const userCompanyId = currentCompany?.id || currentUser?.companyId || 'comp-fazenda';
+
+  const [companyFilter, setCompanyFilter] = useState(isMaster ? 'all' : userCompanyId);
   const [activeTab, setActiveTab] = useState('active'); // 'active' | 'completed' | 'all'
   const [selectedRouteId, setSelectedRouteId] = useState(null);
   const [itemInputs, setItemInputs] = useState({});
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
+
+  // Sync companyFilter if not master
+  React.useEffect(() => {
+    if (!isMaster) {
+      setCompanyFilter(userCompanyId);
+    }
+  }, [isMaster, userCompanyId]);
 
   // New route state
   const [newTitle, setNewTitle] = useState('');
@@ -112,7 +122,9 @@ export function RouteChecklistManager() {
 
   const isLeader = currentRole === 'owner' || currentRole === 'manager' || currentRole === 'master';
 
-  const availableRoutes = (allRoutes && allRoutes.length > 0) ? allRoutes : (routes || []);
+  const availableRoutes = isMaster
+    ? ((allRoutes && allRoutes.length > 0) ? allRoutes : (routes || []))
+    : (routes || []);
 
   const filteredRoutes = availableRoutes.filter((r) => {
     if (!r) return false;
@@ -440,50 +452,60 @@ export function RouteChecklistManager() {
           {/* 1. Empresa / Empreendimento Filter */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="text-stone-400 text-[11px] font-bold uppercase tracking-wider mr-1">Empresa:</span>
-            <button
-              type="button"
-              onClick={() => setCompanyFilter('all')}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
-                companyFilter === 'all'
-                  ? 'bg-amber-500 text-stone-950 shadow-sm'
-                  : 'bg-white/5 hover:bg-white/10 text-stone-300'
-              }`}
-            >
-              🌐 Todas as Empresas ({availableRoutes.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setCompanyFilter('comp-fazenda')}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
-                companyFilter === 'comp-fazenda'
-                  ? 'bg-amber-500 text-stone-950 shadow-sm'
-                  : 'bg-white/5 hover:bg-white/10 text-stone-300'
-              }`}
-            >
-              🌾 Fazenda Pantaneiros ({availableRoutes.filter((r) => (r.companyId || 'comp-fazenda') === 'comp-fazenda').length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setCompanyFilter('comp-ferrovia')}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
-                companyFilter === 'comp-ferrovia'
-                  ? 'bg-amber-500 text-stone-950 shadow-sm'
-                  : 'bg-white/5 hover:bg-white/10 text-stone-300'
-              }`}
-            >
-              🚂 Ferrovia West Fox ({availableRoutes.filter((r) => r.companyId === 'comp-ferrovia').length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setCompanyFilter('comp-taverna')}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
-                companyFilter === 'comp-taverna'
-                  ? 'bg-amber-500 text-stone-950 shadow-sm'
-                  : 'bg-white/5 hover:bg-white/10 text-stone-300'
-              }`}
-            >
-              🍺 Taverna ({availableRoutes.filter((r) => r.companyId === 'comp-taverna').length})
-            </button>
+            {isMaster ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCompanyFilter('all')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                    companyFilter === 'all'
+                      ? 'bg-amber-500 text-stone-950 shadow-sm'
+                      : 'bg-white/5 hover:bg-white/10 text-stone-300'
+                  }`}
+                >
+                  🌐 Todas as Empresas ({availableRoutes.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompanyFilter('comp-fazenda')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                    companyFilter === 'comp-fazenda'
+                      ? 'bg-amber-500 text-stone-950 shadow-sm'
+                      : 'bg-white/5 hover:bg-white/10 text-stone-300'
+                  }`}
+                >
+                  🌾 Fazenda Pantaneiros ({availableRoutes.filter((r) => (r.companyId || 'comp-fazenda') === 'comp-fazenda').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompanyFilter('comp-ferrovia')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                    companyFilter === 'comp-ferrovia'
+                      ? 'bg-amber-500 text-stone-950 shadow-sm'
+                      : 'bg-white/5 hover:bg-white/10 text-stone-300'
+                  }`}
+                >
+                  🚂 Ferrovia West Fox ({availableRoutes.filter((r) => r.companyId === 'comp-ferrovia').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompanyFilter('comp-taverna')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                    companyFilter === 'comp-taverna'
+                      ? 'bg-amber-500 text-stone-950 shadow-sm'
+                      : 'bg-white/5 hover:bg-white/10 text-stone-300'
+                  }`}
+                >
+                  🍺 Taverna ({availableRoutes.filter((r) => r.companyId === 'comp-taverna').length})
+                </button>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold text-xs">
+                <span>{currentCompany?.icon || '🏢'}</span>
+                <span>{currentCompany?.name || 'Sua Empresa'}</span>
+                <span className="text-[10px] text-amber-400/80 font-normal ml-1">(Isolamento Exclusivo Ativo)</span>
+              </div>
+            )}
           </div>
 
           {/* 2. Status Filter */}

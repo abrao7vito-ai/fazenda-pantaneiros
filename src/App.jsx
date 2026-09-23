@@ -14,6 +14,7 @@ import { EditProfileModal } from './components/Accounts/EditProfileModal';
 import { DatabaseStatusModal } from './components/Database/DatabaseStatusModal';
 import { RouteChecklistManager } from './components/Routes/RouteChecklistManager';
 import { LoginScreen } from './components/Auth/LoginScreen';
+import { FirstAccessScreen } from './components/Auth/FirstAccessScreen';
 import { formatDols } from './utils/formatters';
 import { 
   Bell, 
@@ -332,12 +333,60 @@ function AppLayout() {
 }
 
 function MainApp() {
-  const { isAuthenticated } = useFarm();
+  const { isAuthenticated, mustChangePasswordUser } = useFarm();
+  const [inviteToken, setInviteToken] = useState(null);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('convite');
+      if (token) {
+        setInviteToken(token);
+      }
+    }
+  }, []);
+
+  // 1. Single-use Invite Link Access (?convite=token)
+  if (inviteToken) {
+    return (
+      <FirstAccessScreen
+        inviteToken={inviteToken}
+        onCompleted={() => {
+          if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
+            const url = new URL(window.location);
+            url.searchParams.delete('convite');
+            window.history.replaceState({}, document.title, url.pathname);
+          }
+          setInviteToken(null);
+        }}
+        onCancel={() => {
+          if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
+            const url = new URL(window.location);
+            url.searchParams.delete('convite');
+            window.history.replaceState({}, document.title, url.pathname);
+          }
+          setInviteToken(null);
+        }}
+      />
+    );
+  }
+
+  // 2. Unauthenticated User Login Screen
   if (!isAuthenticated) {
     return <LoginScreen />;
   }
 
+  // 3. Mandatory First Access / Password Definition for Authenticated Non-Master Accounts
+  if (mustChangePasswordUser) {
+    return (
+      <FirstAccessScreen
+        forcedResetUser={mustChangePasswordUser}
+        onCompleted={() => {}}
+      />
+    );
+  }
+
+  // 4. Fully Authenticated Dashboard & Multi-Enterprise Layout
   return <AppLayout />;
 }
 

@@ -163,6 +163,19 @@ export function FarmProvider({ children }) {
   const [logoutReason, setLogoutReason] = useState(null); // 'inactivity' | 'user' | null
   const lastActivityRef = useRef(Date.now());
   const [minutesRemaining, setMinutesRemaining] = useState(15);
+  const [mustChangePasswordUser, setMustChangePasswordUser] = useState(null);
+
+  // Monitor firstAccessDone for currently active user
+  useEffect(() => {
+    if (isAuthenticated && currentUserId && members.length > 0) {
+      const activeMem = members.find((m) => m.id === currentUserId);
+      if (activeMem && activeMem.role !== 'master' && !activeMem.firstAccessDone) {
+        setMustChangePasswordUser(activeMem);
+      } else if (activeMem && (activeMem.role === 'master' || activeMem.firstAccessDone)) {
+        setMustChangePasswordUser(null);
+      }
+    }
+  }, [isAuthenticated, currentUserId, members]);
 
   // --- Sync with LocalStorage (Apenas Sessão e Empresa Ativa) ---
   useEffect(() => {
@@ -335,6 +348,11 @@ export function FarmProvider({ children }) {
           setDeliveries(payload);
         }
       })
+      .on('broadcast', { event: 'discord_updated' }, ({ payload }) => {
+        if (payload && typeof payload === 'object') {
+          setDiscordSettings(payload);
+        }
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           const item = toLocalTransaction(payload.new);
@@ -447,6 +465,9 @@ export function FarmProvider({ children }) {
             }
             if (row.key === 'split' && val) {
               setSplitSettings((current) => (JSON.stringify(current) !== JSON.stringify(val) ? val : current));
+            }
+            if (row.key === 'discord' && val && typeof val === 'object') {
+              setDiscordSettings((current) => (JSON.stringify(current) !== JSON.stringify(val) ? val : current));
             }
           });
         }
@@ -568,6 +589,13 @@ export function FarmProvider({ children }) {
         try {
           localStorage.setItem(STORAGE_KEYS.ACTIVE_COMPANY, userCompany);
         } catch (_) {}
+      }
+
+      // First Access & Password Definition Enforcement (All non-master users without firstAccessDone)
+      if (member.role !== 'master' && !member.firstAccessDone) {
+        setMustChangePasswordUser(member);
+      } else {
+        setMustChangePasswordUser(null);
       }
 
       if (typeof fetchSupabaseData === 'function') {
@@ -725,26 +753,19 @@ export function FarmProvider({ children }) {
     fallbackCompany;
 
   // Multi-Company Discord Webhook Settings Resolver:
-  // Resolves the specific webhook configuration for the specified company,
-  // falling back gracefully to global settings if not yet customized.
+  // Resolves the specific webhook configuration for the specified company.
+  // STRICT SAAS ISOLATION: Each company maintains its own dedicated webhook.
+  // Never falls back to a global webhook URL to prevent cross-company leakage.
   const getCompanyDiscordSettings = (companyId) => {
     const cId = companyId || currentCompanyId || 'comp-fazenda';
     const compSettings = discordSettings?.byCompany?.[cId];
-    if (compSettings && typeof compSettings === 'object' && compSettings.webhookUrl) {
-      return {
-        webhookUrl: compSettings.webhookUrl || '',
-        enabled: compSettings.enabled ?? (discordSettings?.enabled ?? true),
-        autoCashflow: compSettings.autoCashflow ?? (discordSettings?.autoCashflow ?? true),
-        autoDeliveries: compSettings.autoDeliveries ?? (discordSettings?.autoDeliveries ?? true),
-        autoPayroll: compSettings.autoPayroll ?? (discordSettings?.autoPayroll ?? true),
-      };
-    }
     return {
-      webhookUrl: compSettings?.webhookUrl || discordSettings?.webhookUrl || '',
+      webhookUrl: compSettings?.webhookUrl || '',
       enabled: compSettings?.enabled ?? (discordSettings?.enabled ?? true),
       autoCashflow: compSettings?.autoCashflow ?? (discordSettings?.autoCashflow ?? true),
       autoDeliveries: compSettings?.autoDeliveries ?? (discordSettings?.autoDeliveries ?? true),
       autoPayroll: compSettings?.autoPayroll ?? (discordSettings?.autoPayroll ?? true),
+      autoDeletePrevious: compSettings?.autoDeletePrevious ?? (discordSettings?.autoDeletePrevious ?? true),
     };
   };
 
@@ -1671,6 +1692,11 @@ export function FarmProvider({ children }) {
       return `Membro • ${compName}`;
     };
 
+    const inviteToken = (targetRole !== 'master')
+      ? ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : (Math.random().toString(36).substring(2) + Date.now().toString(36)))
+      : null;
+    const inviteExpiresAt = inviteToken ? new Date(Date.now() + 24 * 3600 * 1000).toISOString() : null;
+
     const newMember = {
       id: `mem-${Date.now()}`,
       name: sanitizeString(name, 80),
@@ -1681,6 +1707,9 @@ export function FarmProvider({ children }) {
       passport: passport ? sanitizeString(String(passport), 40) : '',
       phone: phone ? sanitizeString(String(phone), 40) : '',
       pin: pin ? sanitizeString(String(pin), 20) : '1234',
+      firstAccessDone: targetRole === 'master',
+      inviteToken,
+      inviteExpiresAt,
       createdAt: new Date().toISOString(),
       active: true,
     };
@@ -1713,7 +1742,7 @@ export function FarmProvider({ children }) {
       });
     }
 
-    return newMember;
+    return { ...newMember, inviteToken, inviteExpiresAt };
   };
 
   const deleteMember = (id) => {
@@ -1846,6 +1875,162 @@ export function FarmProvider({ children }) {
     return { success: true };
   };
 
+  // --- Primeiro Acesso e Gestão de Convites Criptográficos ---
+  const validateInviteToken = (token) => {
+    if (!token || typeof token !== 'string') {
+      return { valid: false, error: 'Token de convite inválido ou ausente.' };
+    }
+    const cleanToken = token.trim();
+    const foundMember = members.find((m) => m.inviteToken === cleanToken);
+    if (!foundMember) {
+      return { valid: false, error: 'Convite não encontrado ou já utilizado.' };
+    }
+    if (foundMember.inviteExpiresAt) {
+      const expires = new Date(foundMember.inviteExpiresAt).getTime();
+      if (!isNaN(expires) && Date.now() > expires) {
+        return { valid: false, error: 'Este link de convite expirou (validade máxima de 24 horas). Solicite um novo link ao seu líder.' };
+      }
+    }
+    return { valid: true, member: foundMember };
+  };
+
+  const completeFirstAccess = async ({ memberId, newPin, inviteToken }) => {
+    const cleanPin = String(newPin || '').trim();
+    if (!cleanPin || cleanPin.length < 4 || cleanPin.length > 8) {
+      return { success: false, error: 'O novo PIN deve conter entre 4 e 8 dígitos.' };
+    }
+
+    const targetMember = members.find((m) => m.id === memberId || (inviteToken && m.inviteToken === inviteToken));
+    if (!targetMember) {
+      return { success: false, error: 'Conta de membro não encontrada.' };
+    }
+
+    if (inviteToken && targetMember.inviteExpiresAt) {
+      const expires = new Date(targetMember.inviteExpiresAt).getTime();
+      if (!isNaN(expires) && Date.now() > expires) {
+        return { success: false, error: 'Este link de convite expirou. Solicite um novo ao seu líder.' };
+      }
+    }
+
+    const updatedMember = {
+      ...targetMember,
+      pin: cleanPin,
+      firstAccessDone: true,
+      inviteToken: null,
+      inviteExpiresAt: null,
+    };
+
+    setMembers((prev) => {
+      const updated = prev.map((m) => (m.id === targetMember.id ? updatedMember : m));
+      if (realtimeChannelRef.current) {
+        try {
+          realtimeChannelRef.current.send({
+            type: 'broadcast',
+            event: 'members_updated',
+            payload: updated,
+          });
+        } catch (_) {}
+      }
+      return updated;
+    });
+
+    if (supabase) {
+      try {
+        await supabase.from('members').update(toDbMember(updatedMember)).eq('id', targetMember.id);
+      } catch (err) {
+        console.error('Erro ao atualizar primeiro acesso no Supabase:', err);
+      }
+    }
+
+    // Automatically authenticate the user if they were in the first-access / forced-reset flow
+    setCurrentUserId(updatedMember.id);
+    setIsAuthenticated(true);
+    setMustChangePasswordUser(null);
+    setLogoutReason(null);
+    lastActivityRef.current = Date.now();
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('pantaneiros_auth_v1', 'true');
+      sessionStorage.setItem('pantaneiros_user_id', updatedMember.id);
+    }
+    try {
+      localStorage.setItem('pantaneiros_auth_v1', 'true');
+      localStorage.setItem('pantaneiros_last_active', String(Date.now()));
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, updatedMember.id);
+    } catch (_) {}
+
+    if (updatedMember.role !== 'master') {
+      const userCompany = updatedMember.companyId && updatedMember.companyId !== 'all' ? updatedMember.companyId : 'comp-fazenda';
+      setCurrentCompanyId(userCompany);
+      try {
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_COMPANY, userCompany);
+      } catch (_) {}
+    }
+
+    logSecurityEvent('FIRST_ACCESS_COMPLETED', {
+      userId: updatedMember.id,
+      userName: updatedMember.name,
+      role: updatedMember.role,
+      details: 'Primeiro acesso e definição de PIN pessoal concluídos com sucesso',
+    });
+
+    return { success: true, member: updatedMember };
+  };
+
+  const regenerateInviteToken = async (memberId) => {
+    if (!hasPermission(currentRole, 'ADD_MEMBER')) {
+      return { success: false, error: 'Acesso negado: apenas líderes podem gerar novos links de convite.' };
+    }
+
+    const targetMember = members.find((m) => m.id === memberId);
+    if (!targetMember) {
+      return { success: false, error: 'Membro não encontrado.' };
+    }
+
+    const newToken = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID().replace(/-/g, '')
+      : (Math.random().toString(36).substring(2) + Date.now().toString(36));
+    const newExpires = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+
+    const updatedMember = {
+      ...targetMember,
+      inviteToken: newToken,
+      inviteExpiresAt: newExpires,
+      firstAccessDone: false,
+    };
+
+    setMembers((prev) => {
+      const updated = prev.map((m) => (m.id === targetMember.id ? updatedMember : m));
+      if (realtimeChannelRef.current) {
+        try {
+          realtimeChannelRef.current.send({
+            type: 'broadcast',
+            event: 'members_updated',
+            payload: updated,
+          });
+        } catch (_) {}
+      }
+      return updated;
+    });
+
+    if (supabase) {
+      try {
+        await supabase.from('members').update(toDbMember(updatedMember)).eq('id', targetMember.id);
+      } catch (err) {
+        console.error('Erro ao atualizar convite no Supabase:', err);
+      }
+    }
+
+    logSecurityEvent('INVITE_REGENERATED', {
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      role: currentRole,
+      targetId: targetMember.id,
+      details: `Novo link de convite de 24h gerado para: ${targetMember.name}`,
+    });
+
+    return { success: true, inviteToken: newToken, inviteExpiresAt: newExpires };
+  };
+
   const closeFinancialCycle = ({ title, periodNote, companyId } = {}) => {
     if (!hasPermission(currentRole, 'CLOSE_CYCLE')) {
       logSecurityEvent('UNAUTHORIZED_ACTION', {
@@ -1936,6 +2121,19 @@ export function FarmProvider({ children }) {
     }
 
     const cId = targetCompanyId || currentCompanyId || 'comp-fazenda';
+
+    // Strict SaaS Multi-Tenant Isolation: non-master cannot modify another company's integrations
+    if (currentRole !== 'master' && currentUser?.companyId && currentUser.companyId !== 'all' && currentUser.companyId !== cId) {
+      logSecurityEvent('UNAUTHORIZED_ACTION', {
+        userId: currentUser?.id,
+        userName: currentUser?.name,
+        role: currentRole,
+        details: `Tentativa não autorizada de alterar webhook de outra empresa (${cId})`,
+        success: false,
+      });
+      throw new Error('Acesso negado: você só pode gerenciar as integrações da sua própria empresa.');
+    }
+
     const existingComp = discordSettings?.byCompany?.[cId] || {};
     const updatedComp = {
       ...existingComp,
@@ -1952,15 +2150,6 @@ export function FarmProvider({ children }) {
       byCompany: updatedByCompany,
     };
 
-    // If updating Fazenda or if root webhookUrl is empty, sync top-level
-    if (cId === 'comp-fazenda' || !merged.webhookUrl) {
-      merged.webhookUrl = updatedComp.webhookUrl || merged.webhookUrl;
-      merged.enabled = updatedComp.enabled ?? merged.enabled;
-      merged.autoCashflow = updatedComp.autoCashflow ?? merged.autoCashflow;
-      merged.autoDeliveries = updatedComp.autoDeliveries ?? merged.autoDeliveries;
-      merged.autoPayroll = updatedComp.autoPayroll ?? merged.autoPayroll;
-    }
-
     logSecurityEvent('DISCORD_SETTINGS_UPDATED', {
       userId: currentUser?.id,
       userName: currentUser?.name,
@@ -1969,6 +2158,17 @@ export function FarmProvider({ children }) {
     });
 
     setDiscordSettings(merged);
+
+    // Instant Realtime Broadcast across all connected devices
+    if (realtimeChannelRef.current) {
+      try {
+        realtimeChannelRef.current.send({
+          type: 'broadcast',
+          event: 'discord_updated',
+          payload: merged,
+        });
+      } catch (_) {}
+    }
 
     if (supabase) {
       const { error } = await supabase.from('farm_settings').upsert({
@@ -2045,6 +2245,12 @@ export function FarmProvider({ children }) {
     }
     const route = routes.find((r) => r.id === routeId);
     if (!route) return { success: false, error: 'Rota não encontrada.' };
+    if (currentRole !== 'master' && currentUser?.companyId && currentUser.companyId !== 'all') {
+      const rComp = route.companyId || 'comp-fazenda';
+      if (rComp !== currentUser.companyId) {
+        return { success: false, error: 'Acesso negado: você não tem permissão para iniciar rotas de outra empresa.' };
+      }
+    }
     if (route.status === 'in_progress') {
       return { success: false, error: 'Esta rota já está em andamento.' };
     }
@@ -2085,6 +2291,15 @@ export function FarmProvider({ children }) {
     if (!isAuthenticated || !currentUser) {
       return { success: false, error: 'Acesso negado: faça login para atualizar itens de rotas.' };
     }
+    const targetRouteCheck = routes.find((r) => r.id === routeId);
+    if (!targetRouteCheck) return { success: false, error: 'Rota não encontrada.' };
+    if (currentRole !== 'master' && currentUser?.companyId && currentUser.companyId !== 'all') {
+      const rComp = targetRouteCheck.companyId || 'comp-fazenda';
+      if (rComp !== currentUser.companyId) {
+        return { success: false, error: 'Acesso negado: você não tem permissão para alterar o estoque de outra empresa.' };
+      }
+    }
+
     let updatedItem = null;
     let targetRoute = null;
 
@@ -2163,6 +2378,12 @@ export function FarmProvider({ children }) {
     }
     const route = routes.find((r) => r.id === routeId);
     if (!route) return { success: false, error: 'Rota não encontrada.' };
+    if (currentRole !== 'master' && currentUser?.companyId && currentUser.companyId !== 'all') {
+      const rComp = route.companyId || 'comp-fazenda';
+      if (rComp !== currentUser.companyId) {
+        return { success: false, error: 'Acesso negado: você não tem permissão para concluir rotas de outra empresa.' };
+      }
+    }
     if (route.status === 'completed') {
       return { success: false, error: 'Esta rota já foi concluída anteriormente.' };
     }
@@ -2223,6 +2444,12 @@ export function FarmProvider({ children }) {
     }
     const route = routes.find((r) => r.id === routeId);
     if (!route) return { success: false, error: 'Rota não encontrada.' };
+    if (currentRole !== 'master' && currentUser?.companyId && currentUser.companyId !== 'all') {
+      const rComp = route.companyId || 'comp-fazenda';
+      if (rComp !== currentUser.companyId) {
+        return { success: false, error: 'Acesso negado: você não tem permissão para reiniciar rotas de outra empresa.' };
+      }
+    }
 
     const resetItems = (route.items || []).map((it) => ({
       ...it,
@@ -2261,9 +2488,13 @@ export function FarmProvider({ children }) {
     }
 
     const id = `route-${Date.now()}`;
+    const targetCompId = (currentRole !== 'master' && currentUser?.companyId && currentUser.companyId !== 'all')
+      ? currentUser.companyId
+      : (newRoute.companyId || currentCompanyId || 'comp-fazenda');
+
     const routeObj = {
       id,
-      companyId: newRoute.companyId || currentCompanyId || 'comp-fazenda',
+      companyId: targetCompId,
       title: sanitizeString(newRoute.title, 100) || 'Nova Rota',
       rewardAmount: sanitizePositiveNumber(newRoute.rewardAmount, 0),
       icon: newRoute.icon || '📦',
@@ -2306,6 +2537,15 @@ export function FarmProvider({ children }) {
       return { success: false, error: 'Acesso negado: apenas Gerentes ou Donos podem editar rotas.' };
     }
 
+    const targetR = routes.find((r) => r.id === routeId);
+    if (!targetR) return { success: false, error: 'Rota não encontrada.' };
+    if (currentRole !== 'master' && currentUser?.companyId && currentUser.companyId !== 'all') {
+      const rComp = targetR.companyId || 'comp-fazenda';
+      if (rComp !== currentUser.companyId) {
+        return { success: false, error: 'Acesso negado: você não tem permissão para editar rotas de outra empresa.' };
+      }
+    }
+
     const updated = routes.map((r) => {
       if (r.id !== routeId) return r;
       return {
@@ -2314,7 +2554,7 @@ export function FarmProvider({ children }) {
         rewardAmount: updatedData.rewardAmount !== undefined ? sanitizePositiveNumber(updatedData.rewardAmount, 0) : r.rewardAmount,
         icon: updatedData.icon !== undefined ? updatedData.icon : r.icon,
         description: updatedData.description !== undefined ? sanitizeString(updatedData.description, 500) : r.description,
-        companyId: updatedData.companyId !== undefined ? updatedData.companyId : r.companyId,
+        companyId: currentRole === 'master' ? (updatedData.companyId !== undefined ? updatedData.companyId : r.companyId) : r.companyId,
         items: updatedData.items !== undefined ? updatedData.items : r.items,
         updatedAt: new Date().toISOString(),
       };
@@ -2336,6 +2576,15 @@ export function FarmProvider({ children }) {
       return { success: false, error: 'Acesso negado: apenas Gerentes ou Donos podem excluir rotas.' };
     }
 
+    const targetR = routes.find((r) => r.id === routeId);
+    if (!targetR) return { success: false, error: 'Rota não encontrada.' };
+    if (currentRole !== 'master' && currentUser?.companyId && currentUser.companyId !== 'all') {
+      const rComp = targetR.companyId || 'comp-fazenda';
+      if (rComp !== currentUser.companyId) {
+        return { success: false, error: 'Acesso negado: você não tem permissão para excluir rotas de outra empresa.' };
+      }
+    }
+
     const updated = routes.filter((r) => r.id !== routeId);
     syncRoutesState(updated);
     return { success: true };
@@ -2348,6 +2597,12 @@ export function FarmProvider({ children }) {
     }
     const route = routes.find((r) => r.id === routeId);
     if (!route) return { success: false, message: 'Rota não encontrada.' };
+    if (currentRole !== 'master' && currentUser?.companyId && currentUser.companyId !== 'all') {
+      const rComp = route.companyId || 'comp-fazenda';
+      if (rComp !== currentUser.companyId) {
+        return { success: false, message: 'Acesso negado: você não tem permissão para despachar rotas de outra empresa.' };
+      }
+    }
 
     const items = route.items || [];
     const count = Math.max(1, parseInt(batchCount, 10) || 1);
@@ -2542,6 +2797,10 @@ export function FarmProvider({ children }) {
         // Authentication & Security
         isAuthenticated,
         logoutReason,
+        mustChangePasswordUser,
+        validateInviteToken,
+        completeFirstAccess,
+        regenerateInviteToken,
         login,
         logout,
         minutesRemaining,

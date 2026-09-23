@@ -16,7 +16,12 @@ import {
   Search,
   Filter,
   Key,
-  ShieldCheck
+  ShieldCheck,
+  Check,
+  Copy,
+  Clock,
+  Link2,
+  X
 } from 'lucide-react';
 
 export function MemberManager() {
@@ -28,11 +33,14 @@ export function MemberManager() {
     memberPayouts, 
     currentRole, 
     currentUser, 
-    updateMember
+    updateMember,
+    regenerateInviteToken
   } = useFarm();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState(null);
+  const [inviteModalData, setInviteModalData] = useState(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'manager' | 'member' | 'owner'
   const [companyFilter, setCompanyFilter] = useState('current'); // 'current' | 'all' | companyId
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,6 +73,29 @@ export function MemberManager() {
 
     return matchesFilter && matchesSearch;
   });
+
+  const handleRegenerateInvite = async (targetMember) => {
+    const res = await regenerateInviteToken(targetMember.id);
+    if (res && res.success) {
+      setInviteModalData({
+        member: targetMember,
+        inviteToken: res.inviteToken,
+        inviteExpiresAt: res.inviteExpiresAt,
+      });
+      setInviteCopied(false);
+    } else {
+      alert(`⚠️ ${res?.error || 'Não foi possível gerar o link de convite.'}`);
+    }
+  };
+
+  const handleCopyInviteModal = () => {
+    if (!inviteModalData?.inviteToken) return;
+    const url = `${window.location.origin}/?convite=${inviteModalData.inviteToken}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 3000);
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -326,28 +357,28 @@ export function MemberManager() {
                     <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                     <span>Sua Conta Conectada</span>
                   </div>
-                ) : (
-                  <div className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-stone-50 text-stone-600 font-semibold border border-stone-200">
+                ) : member.firstAccessDone ? (
+                  <div className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>PIN Protegido</span>
+                    <span>PIN Ativo</span>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-amber-50 text-amber-800 font-semibold border border-amber-200">
+                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Aguardando 1º Acesso</span>
                   </div>
                 )}
 
                 {/* Leader Actions for other members */}
                 {canManage && !isCurrent && (
                   <div className="flex items-center gap-1">
-                    {/* Reset PIN button (only leaders can reset forgotten PIN to default 1234) */}
+                    {/* Regenerate / Send Invite Link button */}
                     <button
-                      onClick={() => {
-                        if (window.confirm(`Deseja redefinir o PIN de "${member.name}" para o padrão "1234"?`)) {
-                          updateMember(member.id, { pin: '1234' });
-                          alert(`O PIN de ${member.name} foi redefinido para 1234 com sucesso!`);
-                        }
-                      }}
-                      title={`Redefinir PIN de ${member.name} para 1234`}
+                      onClick={() => handleRegenerateInvite(member)}
+                      title={`Gerar Link de Convite / Redefinir Senha de ${member.name}`}
                       className="p-2 rounded-xl text-stone-400 hover:text-amber-700 hover:bg-amber-50 border border-transparent hover:border-amber-200 transition-colors"
                     >
-                      <Key className="w-4 h-4" />
+                      <Link2 className="w-4 h-4" />
                     </button>
 
                     {/* Delete Account button (Master can delete ANY owner, manager or member. Owners cannot delete other owners) */}
@@ -381,6 +412,75 @@ export function MemberManager() {
         onClose={() => setMemberToDelete(null)}
         memberToDelete={memberToDelete}
       />
+
+      {/* Invite & First Access Link Modal */}
+      {inviteModalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-stone-200 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-100 text-amber-800">
+                  <Link2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-stone-900">Link de Convite & 1º Acesso</h3>
+                  <p className="text-xs text-stone-500">{inviteModalData.member.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setInviteModalData(null)}
+                className="text-stone-400 hover:text-stone-700 p-1.5 rounded-xl hover:bg-stone-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-stone-700">
+                Link Exclusivo (Válido por 24 Horas):
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={`${typeof window !== 'undefined' ? window.location.origin : ''}/?convite=${inviteModalData.inviteToken}`}
+                  className="flex-1 bg-stone-50 border border-stone-300 rounded-xl px-3 py-2 text-xs text-stone-800 font-mono select-all outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyInviteModal}
+                  className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm ${
+                    inviteCopied
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-stone-900 hover:bg-stone-800 text-white'
+                  }`}
+                >
+                  {inviteCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  <span>{inviteCopied ? 'Copiado!' : 'Copiar'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
+              <p className="font-semibold flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span>Como funciona:</span>
+              </p>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Envie este link para <strong>{inviteModalData.member.name}</strong>. Ao abrir o link, ele definirá seu PIN pessoal e terá o acesso liberado automaticamente. O link expira em 24h e é de uso único.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setInviteModalData(null)}
+              className="w-full py-2.5 rounded-xl bg-pantanal-700 hover:bg-pantanal-800 text-white font-bold text-xs transition-colors shadow-sm"
+            >
+              Concluir e Fechar
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

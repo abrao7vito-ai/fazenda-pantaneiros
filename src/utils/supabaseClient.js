@@ -43,9 +43,65 @@ export function extractCompanyTag(text = '', fallback = 'comp-fazenda') {
   return { companyId: fallback, cleanText: text };
 }
 
+export function extractMemberTags(rawLabel = '') {
+  let text = String(rawLabel || '');
+  let companyId = 'comp-fazenda';
+  let firstAccessDone = false;
+  let inviteToken = null;
+  let inviteExpiresAt = null;
+
+  const empMatch = text.match(/\[EMP:([^\]]+)\]/);
+  if (empMatch) {
+    companyId = empMatch[1];
+    text = text.replace(empMatch[0], '').trim();
+  }
+
+  const fadMatch = text.match(/\[FAD:([01])\]/);
+  if (fadMatch) {
+    firstAccessDone = fadMatch[1] === '1';
+    text = text.replace(fadMatch[0], '').trim();
+  }
+
+  const invMatch = text.match(/\[INV:([^:\]]+):([^\]]+)\]/);
+  if (invMatch) {
+    inviteToken = invMatch[1];
+    inviteExpiresAt = invMatch[2];
+    text = text.replace(invMatch[0], '').trim();
+  }
+
+  return { companyId, firstAccessDone, inviteToken, inviteExpiresAt, cleanRoleLabel: text };
+}
+
+export function encodeMemberTags(roleLabel = '', { companyId, firstAccessDone, inviteToken, inviteExpiresAt } = {}) {
+  let clean = String(roleLabel || '')
+    .replace(/(\[EMP:[^\]]+\]|\[FAD:[01]\]|\[INV:[^\]]+\])/g, '')
+    .trim();
+
+  let tags = '';
+  if (companyId && companyId !== 'comp-fazenda' && companyId !== 'all') {
+    tags += `[EMP:${companyId}]`;
+  }
+  if (firstAccessDone) {
+    tags += `[FAD:1]`;
+  } else {
+    tags += `[FAD:0]`;
+  }
+  if (inviteToken && inviteExpiresAt) {
+    tags += `[INV:${inviteToken}:${inviteExpiresAt}]`;
+  }
+
+  return tags ? `${tags} ${clean}`.trim() : clean;
+}
+
 export function toLocalMember(row) {
   if (!row) return null;
-  const { companyId: taggedCompanyId, cleanText: cleanRoleLabel } = extractCompanyTag(row.role_label || '');
+  const { 
+    companyId: taggedCompanyId, 
+    firstAccessDone: taggedFirstAccess, 
+    inviteToken, 
+    inviteExpiresAt, 
+    cleanRoleLabel 
+  } = extractMemberTags(row.role_label || '');
 
   let detectedCompanyId = row.company_id || taggedCompanyId;
   if (!detectedCompanyId || detectedCompanyId === 'comp-fazenda') {
@@ -61,17 +117,22 @@ export function toLocalMember(row) {
     }
   }
 
+  const isMaster = row.role === 'master' || row.id === 'mem-master';
+
   return {
     id: row.id,
     name: row.name || 'Sem nome',
     role: row.role || 'member',
     roleLabel: cleanRoleLabel || row.role_label || (row.role === 'owner' ? 'Líder / Dono' : row.role === 'manager' ? 'Gerente' : 'Membro'),
-    companyId: (row.role === 'master' || row.id === 'mem-master') ? 'all' : detectedCompanyId,
+    companyId: isMaster ? 'all' : detectedCompanyId,
     avatar: row.avatar || (row.role === 'owner' ? '👑' : row.role === 'manager' ? '👔' : '🌾'),
     passport: row.passport ? String(row.passport) : '',
     phone: row.phone || '',
     pin: row.pin || '1234',
     active: row.active ?? true,
+    firstAccessDone: isMaster ? true : taggedFirstAccess,
+    inviteToken,
+    inviteExpiresAt,
     createdAt: row.created_at,
   };
 }
@@ -79,15 +140,18 @@ export function toLocalMember(row) {
 export function toDbMember(m) {
   if (!m) return null;
   const rawLabel = m.roleLabel || (m.role === 'owner' ? 'Líder / Dono' : m.role === 'manager' ? 'Gerente' : 'Membro');
-  const roleLabelWithTag = m.companyId && m.companyId !== 'comp-fazenda' && m.companyId !== 'all'
-    ? encodeCompanyTag(rawLabel, m.companyId)
-    : rawLabel;
+  const roleLabelWithTags = encodeMemberTags(rawLabel, {
+    companyId: m.companyId,
+    firstAccessDone: m.firstAccessDone ?? (m.role === 'master'),
+    inviteToken: m.inviteToken,
+    inviteExpiresAt: m.inviteExpiresAt,
+  });
 
   return {
     id: m.id,
     name: m.name,
     role: m.role,
-    role_label: roleLabelWithTag,
+    role_label: roleLabelWithTags,
     avatar: m.avatar,
     passport: m.passport || '',
     phone: m.phone || '',
