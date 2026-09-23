@@ -22,10 +22,15 @@ export function TransactionList() {
   const [sentDiscordId, setSentDiscordId] = useState(null);
 
   const filteredTransactions = transactions.filter((tx) => {
-    const matchesSearch = 
-      tx.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (tx.description && tx.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (tx.category && tx.category.toLowerCase().includes(searchTerm.toLowerCase()));
+    const q = (searchTerm || '').toLowerCase().trim();
+    const memberName = (tx.memberName || '').toLowerCase();
+    const description = (tx.description || '').toLowerCase();
+    const category = (tx.category || '').toLowerCase();
+
+    const matchesSearch = !q ||
+      memberName.includes(q) ||
+      description.includes(q) ||
+      category.includes(q);
 
     const matchesType = filterType === 'all' ? true : tx.type === filterType;
     const matchesMember = filterMember === 'all' ? true : tx.memberId === filterMember;
@@ -195,7 +200,7 @@ export function TransactionList() {
                     <td className="py-3 px-3 whitespace-nowrap">
                       <div className="flex items-center gap-1.5 font-medium text-stone-700">
                         <User className="w-3.5 h-3.5 text-stone-400" />
-                        <span>{tx.memberName}</span>
+                        <span>{tx.memberName || 'Sem responsável'}</span>
                       </div>
                     </td>
 
