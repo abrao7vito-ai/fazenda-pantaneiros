@@ -131,10 +131,13 @@ export function FarmProvider({ children }) {
 
   const [currentUserId, setCurrentUserId] = useState(() => {
     try {
-      const isAuth = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pantaneiros_auth_v1') === 'true';
-      if (!isAuth) return null;
+      const isSessionAuth = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pantaneiros_auth_v1') === 'true';
+      const isLocalAuth = typeof localStorage !== 'undefined' && localStorage.getItem('pantaneiros_auth_v1') === 'true';
+      const lastActive = typeof localStorage !== 'undefined' ? Number(localStorage.getItem('pantaneiros_last_active') || 0) : 0;
+      const isWithinTimeout = (Date.now() - lastActive) < INACTIVITY_TIMEOUT_MS;
+      if (!isSessionAuth && !(isLocalAuth && isWithinTimeout)) return null;
       const sessionUser = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('pantaneiros_user_id') : null;
-      return sessionUser || localStorage.getItem(STORAGE_KEYS.CURRENT_USER) || null;
+      return sessionUser || (typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.CURRENT_USER) : null) || null;
     } catch (e) {
       return null;
     }
@@ -208,9 +211,15 @@ export function FarmProvider({ children }) {
 
   // --- Authentication & 15-Minute Inactivity States ---
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    // Requires login explicitly - check active session
-    if (typeof sessionStorage === 'undefined') return false;
-    return sessionStorage.getItem('pantaneiros_auth_v1') === 'true';
+    try {
+      const isSessionAuth = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pantaneiros_auth_v1') === 'true';
+      const isLocalAuth = typeof localStorage !== 'undefined' && localStorage.getItem('pantaneiros_auth_v1') === 'true';
+      const lastActive = typeof localStorage !== 'undefined' ? Number(localStorage.getItem('pantaneiros_last_active') || 0) : 0;
+      const isWithinTimeout = (Date.now() - lastActive) < INACTIVITY_TIMEOUT_MS;
+      return isSessionAuth || (isLocalAuth && isWithinTimeout);
+    } catch (_) {
+      return false;
+    }
   });
 
   const [logoutReason, setLogoutReason] = useState(null); // 'inactivity' | 'user' | null
@@ -461,6 +470,25 @@ export function FarmProvider({ children }) {
     };
   }, []);
 
+  // Auto-sync whenever user returns to tab or focuses window (e.g. edited on mobile, returned to PC)
+  useEffect(() => {
+    let lastSync = 0;
+    const handleFocusSync = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && Date.now() - lastSync > 2500) {
+        lastSync = Date.now();
+        fetchSupabaseData();
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('visibilitychange', handleFocusSync);
+      window.addEventListener('focus', handleFocusSync);
+      return () => {
+        window.removeEventListener('visibilitychange', handleFocusSync);
+        window.removeEventListener('focus', handleFocusSync);
+      };
+    }
+  }, []);
+
   // Current active user object - Strictly gated by authentication
   const currentUser = isAuthenticated && currentUserId
     ? (members && members.find((m) => m && m.id === currentUserId)) || null
@@ -517,18 +545,23 @@ export function FarmProvider({ children }) {
       sessionStorage.setItem('pantaneiros_user_id', member.id);
     }
     try {
+      localStorage.setItem('pantaneiros_auth_v1', 'true');
+      localStorage.setItem('pantaneiros_last_active', String(Date.now()));
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, member.id);
     } catch (_) {}
 
     // Strict SaaS Multi-Tenant Isolation:
-    // When a non-master user logs in, instantly lock to their assigned company
-    if (member.role !== 'master') {
+    // Regular members are locked to their assigned company
+    if (member.role === 'member') {
       const userCompany = member.companyId && member.companyId !== 'all' ? member.companyId : 'comp-fazenda';
       setCurrentCompanyId(userCompany);
       try {
         localStorage.setItem(STORAGE_KEYS.ACTIVE_COMPANY, userCompany);
       } catch (_) {}
     }
+
+    // Instantly refresh Supabase data on login to pull recent changes made on other devices
+    fetchSupabaseData();
 
     return { success: true, member };
   };
@@ -543,6 +576,8 @@ export function FarmProvider({ children }) {
       sessionStorage.removeItem('pantaneiros_user_id');
     }
     try {
+      localStorage.removeItem('pantaneiros_auth_v1');
+      localStorage.removeItem('pantaneiros_last_active');
       localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
     } catch (_) {}
   };
@@ -564,6 +599,9 @@ export function FarmProvider({ children }) {
 
     const handleUserActivity = () => {
       lastActivityRef.current = Date.now();
+      try {
+        localStorage.setItem('pantaneiros_last_active', String(Date.now()));
+      } catch (_) {}
     };
 
     activityEvents.forEach((eventName) => {
@@ -1800,6 +1838,22 @@ export function FarmProvider({ children }) {
 
   // --- Rotas & Missões com Checklist (Fazenda, Ferrovia, Taverna) ---
 
+  const syncRoutesState = (updatedList) => {
+    setRoutes(updatedList);
+    try {
+      localStorage.setItem(STORAGE_KEYS.ROUTES, JSON.stringify(updatedList));
+    } catch (_) {}
+    if (supabase) {
+      supabase.from('farm_settings').upsert({
+        key: 'routes',
+        value: updatedList,
+        updated_at: new Date().toISOString(),
+      }).then(({ error }) => {
+        if (error) console.error('Erro ao sincronizar rotas no Supabase:', error);
+      }).catch((e) => console.error('Falha de rede ao sincronizar rotas:', e));
+    }
+  };
+
   const startRoute = (routeId) => {
     if (!isAuthenticated || !currentUser) {
       return { success: false, error: 'Acesso negado: faça login para iniciar rotas.' };
@@ -1825,15 +1879,7 @@ export function FarmProvider({ children }) {
         : r
     );
 
-    setRoutes(updated);
-
-    if (supabase) {
-      supabase.from('farm_settings').upsert({
-        key: 'routes',
-        value: updated,
-        updated_at: new Date().toISOString(),
-      }).then();
-    }
+    syncRoutesState(updated);
 
     const startRouteCompId = route.companyId || currentCompanyId;
     const startRouteCompany = companies.find((c) => c.id === startRouteCompId) || currentCompany;
@@ -1906,15 +1952,7 @@ export function FarmProvider({ children }) {
       return targetRoute;
     });
 
-    setRoutes(updated);
-
-    if (supabase) {
-      supabase.from('farm_settings').upsert({
-        key: 'routes',
-        value: updated,
-        updated_at: new Date().toISOString(),
-      }).then();
-    }
+    syncRoutesState(updated);
 
     if (targetRoute) {
       const progRouteCompId = targetRoute.companyId || currentCompanyId;
@@ -1962,15 +2000,7 @@ export function FarmProvider({ children }) {
     };
 
     const updated = routes.map((r) => (r.id === routeId ? updatedRoute : r));
-    setRoutes(updated);
-
-    if (supabase) {
-      supabase.from('farm_settings').upsert({
-        key: 'routes',
-        value: updated,
-        updated_at: new Date().toISOString(),
-      }).then();
-    }
+    syncRoutesState(updated);
 
     // Credita recompensa no caixa da empresa
     if (creditToBox && route.rewardAmount > 0) {
@@ -2029,15 +2059,7 @@ export function FarmProvider({ children }) {
         : r
     );
 
-    setRoutes(updated);
-
-    if (supabase) {
-      supabase.from('farm_settings').upsert({
-        key: 'routes',
-        value: updated,
-        updated_at: new Date().toISOString(),
-      }).then();
-    }
+    syncRoutesState(updated);
     return { success: true };
   };
 
@@ -2069,15 +2091,7 @@ export function FarmProvider({ children }) {
     };
 
     const updated = [routeObj, ...routes];
-    setRoutes(updated);
-
-    if (supabase) {
-      supabase.from('farm_settings').upsert({
-        key: 'routes',
-        value: updated,
-        updated_at: new Date().toISOString(),
-      }).then();
-    }
+    syncRoutesState(updated);
 
     const addRouteCompId = routeObj.companyId || currentCompanyId;
     const addRouteCompany = companies.find((c) => c.id === addRouteCompId) || currentCompany;
@@ -2121,15 +2135,7 @@ export function FarmProvider({ children }) {
       };
     });
 
-    setRoutes(updated);
-
-    if (supabase) {
-      supabase.from('farm_settings').upsert({
-        key: 'routes',
-        value: updated,
-        updated_at: new Date().toISOString(),
-      }).then();
-    }
+    syncRoutesState(updated);
     return { success: true };
   };
 
@@ -2146,15 +2152,7 @@ export function FarmProvider({ children }) {
     }
 
     const updated = routes.filter((r) => r.id !== routeId);
-    setRoutes(updated);
-
-    if (supabase) {
-      supabase.from('farm_settings').upsert({
-        key: 'routes',
-        value: updated,
-        updated_at: new Date().toISOString(),
-      }).then();
-    }
+    syncRoutesState(updated);
     return { success: true };
   };
 
@@ -2218,15 +2216,7 @@ export function FarmProvider({ children }) {
     };
 
     const updatedRoutes = routes.map((r) => (r.id === routeId ? targetRoute : r));
-    setRoutes(updatedRoutes);
-
-    if (supabase) {
-      supabase.from('farm_settings').upsert({
-        key: 'routes',
-        value: updatedRoutes,
-        updated_at: new Date().toISOString(),
-      }).then();
-    }
+    syncRoutesState(updatedRoutes);
 
     // Credita o valor ganho na tesouraria / caixa da empresa
     addTransaction({

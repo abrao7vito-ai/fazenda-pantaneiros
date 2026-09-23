@@ -68,6 +68,7 @@ function getAnimalRouteMetrics(route) {
 export function RouteChecklistManager() {
   const { 
     routes, 
+    allRoutes,
     startRoute, 
     updateRouteItem, 
     completeRoute, 
@@ -79,13 +80,18 @@ export function RouteChecklistManager() {
     currentCompany,
     currentRole,
     currentUser,
-    discordSettings
+    discordSettings,
+    refreshDbConnection,
+    dbStatus
   } = useFarm();
 
+  const [companyFilter, setCompanyFilter] = useState('all'); // 'all' | 'comp-fazenda' | 'comp-ferrovia' | 'comp-taverna'
   const [activeTab, setActiveTab] = useState('active'); // 'active' | 'completed' | 'all'
   const [selectedRouteId, setSelectedRouteId] = useState(null);
   const [itemInputs, setItemInputs] = useState({});
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
 
   // New route state
   const [newTitle, setNewTitle] = useState('');
@@ -106,31 +112,63 @@ export function RouteChecklistManager() {
 
   const isLeader = currentRole === 'owner' || currentRole === 'manager' || currentRole === 'master';
 
-  const filteredRoutes = (routes || []).filter((r) => {
+  const availableRoutes = (allRoutes && allRoutes.length > 0) ? allRoutes : (routes || []);
+
+  const filteredRoutes = availableRoutes.filter((r) => {
     if (!r) return false;
+    if (companyFilter !== 'all') {
+      const rComp = r.companyId || 'comp-fazenda';
+      if (rComp !== companyFilter) return false;
+    }
     if (activeTab === 'active') return r.status === 'in_progress' || r.status === 'template';
     if (activeTab === 'completed') return r.status === 'completed';
     return true;
   });
 
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      if (refreshDbConnection) await refreshDbConnection();
+      setLastSyncTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    } catch (e) {
+      console.error('Erro na sincronização manual:', e);
+    } finally {
+      setTimeout(() => setIsSyncing(false), 500);
+    }
+  };
+
   const handleQuickAdd = (routeId, itemId, amount) => {
-    updateRouteItem(routeId, itemId, { addQuantity: amount });
+    const res = updateRouteItem(routeId, itemId, { addQuantity: amount });
+    if (res && res.success === false) {
+      alert(`⚠️ ${res.error || 'Não foi possível atualizar o estoque.'}`);
+    }
   };
 
   const handleToggleComplete = (routeId, itemId, currentStatus) => {
-    updateRouteItem(routeId, itemId, { markCompleted: !currentStatus });
+    const res = updateRouteItem(routeId, itemId, { markCompleted: !currentStatus });
+    if (res && res.success === false) {
+      alert(`⚠️ ${res.error || 'Não foi possível alterar o status.'}`);
+    }
   };
 
   const handleSetQuantity = (routeId, itemId, val) => {
     const num = Math.max(0, parseFloat(val) || 0);
-    updateRouteItem(routeId, itemId, { setQuantity: num });
+    const res = updateRouteItem(routeId, itemId, { setQuantity: num });
+    if (res && res.success === false) {
+      alert(`⚠️ ${res.error || 'Não foi possível atualizar o estoque.'}`);
+      return;
+    }
     setItemInputs((prev) => ({ ...prev, [`${routeId}-${itemId}`]: num }));
   };
 
   const handleCustomAdd = (routeId, itemId) => {
     const val = parseFloat(itemInputs[`${routeId}-${itemId}`]);
     if (isNaN(val) || val <= 0) return;
-    updateRouteItem(routeId, itemId, { addQuantity: val });
+    const res = updateRouteItem(routeId, itemId, { addQuantity: val });
+    if (res && res.success === false) {
+      alert(`⚠️ ${res.error || 'Não foi possível adicionar quantidade.'}`);
+      return;
+    }
     setItemInputs((prev) => ({ ...prev, [`${routeId}-${itemId}`]: '' }));
   };
 
@@ -209,7 +247,7 @@ export function RouteChecklistManager() {
       return;
     }
 
-    updateCustomRoute(editingRoute.id, {
+    const res = updateCustomRoute(editingRoute.id, {
       title: editTitle.trim(),
       rewardAmount: parseFloat(editReward) || 0,
       icon: editIcon || '📦',
@@ -230,14 +268,23 @@ export function RouteChecklistManager() {
       }),
     });
 
+    if (res && res.success === false) {
+      alert(`⚠️ ${res.error || 'Não foi possível atualizar a rota.'}`);
+      return;
+    }
+
     setIsEditOpen(false);
     setEditingRoute(null);
-    alert('Rota atualizada com sucesso e sincronizada com o Discord!');
+    alert('Rota atualizada com sucesso e sincronizada com a nuvem!');
   };
 
   const handleDeleteRoute = (routeId, title) => {
     if (window.confirm(`Tem certeza que deseja EXCLUIR permanentemente a rota "${title}"?\n\nEsta ação não poderá ser revertida.`)) {
-      deleteCustomRoute(routeId);
+      const res = deleteCustomRoute(routeId);
+      if (res && res.success === false) {
+        alert(`⚠️ ${res.error || 'Não foi possível excluir a rota.'}`);
+        return;
+      }
       setIsEditOpen(false);
       setEditingRoute(null);
       alert('Rota excluída com sucesso.');
@@ -282,19 +329,25 @@ export function RouteChecklistManager() {
       return;
     }
 
-    addCustomRoute({
+    const res = addCustomRoute({
       title: newTitle,
       rewardAmount: parseFloat(newReward) || 0,
       icon: newIcon,
       description: newDesc,
+      companyId: currentCompany?.id || 'comp-fazenda',
       items: parsedItems,
     });
+
+    if (res && res.success === false) {
+      alert(`⚠️ ${res.error || 'Não foi possível criar a rota.'}`);
+      return;
+    }
 
     setNewTitle('');
     setNewReward('2500');
     setNewDesc('');
     setIsCreateOpen(false);
-    alert('Nova rota criada com sucesso e sincronizada com o Discord!');
+    alert('Nova rota criada com sucesso e sincronizada com a nuvem!');
   };
 
   return (
@@ -328,6 +381,20 @@ export function RouteChecklistManager() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              className="py-2.5 px-3.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+              title="Sincronizar dados em tempo real com o banco de dados Supabase"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-amber-400' : 'text-stone-300'}`} />
+              <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Nuvem'}</span>
+              {lastSyncTime && (
+                <span className="text-[10px] text-amber-300 font-mono">({lastSyncTime})</span>
+              )}
+            </button>
+
             {isLeader && (
               <button
                 type="button"
@@ -341,44 +408,96 @@ export function RouteChecklistManager() {
           </div>
         </div>
 
-        {/* Quick Filter Bar */}
-        <div className="flex items-center gap-2 mt-6 pt-5 border-t border-stone-800 text-xs">
-          <span className="text-stone-400 text-[11px] font-bold uppercase tracking-wider mr-1">Filtrar:</span>
-          <button
-            type="button"
-            onClick={() => setActiveTab('active')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
-              activeTab === 'active'
-                ? 'bg-amber-500 text-stone-950 shadow-sm'
-                : 'bg-white/5 hover:bg-white/10 text-stone-300'
-            }`}
-          >
-            Rotas em Andamento ({routes.filter((r) => r.status === 'in_progress').length})
-          </button>
+        {/* Company & Status Filter Bars */}
+        <div className="mt-6 pt-5 border-t border-stone-800 space-y-3">
+          {/* 1. Empresa / Empreendimento Filter */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-stone-400 text-[11px] font-bold uppercase tracking-wider mr-1">Empresa:</span>
+            <button
+              type="button"
+              onClick={() => setCompanyFilter('all')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                companyFilter === 'all'
+                  ? 'bg-amber-500 text-stone-950 shadow-sm'
+                  : 'bg-white/5 hover:bg-white/10 text-stone-300'
+              }`}
+            >
+              🌐 Todas as Empresas ({availableRoutes.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCompanyFilter('comp-fazenda')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                companyFilter === 'comp-fazenda'
+                  ? 'bg-amber-500 text-stone-950 shadow-sm'
+                  : 'bg-white/5 hover:bg-white/10 text-stone-300'
+              }`}
+            >
+              🌾 Fazenda Pantaneiros ({availableRoutes.filter((r) => (r.companyId || 'comp-fazenda') === 'comp-fazenda').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCompanyFilter('comp-ferrovia')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                companyFilter === 'comp-ferrovia'
+                  ? 'bg-amber-500 text-stone-950 shadow-sm'
+                  : 'bg-white/5 hover:bg-white/10 text-stone-300'
+              }`}
+            >
+              🚂 Ferrovia West Fox ({availableRoutes.filter((r) => r.companyId === 'comp-ferrovia').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCompanyFilter('comp-taverna')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                companyFilter === 'comp-taverna'
+                  ? 'bg-amber-500 text-stone-950 shadow-sm'
+                  : 'bg-white/5 hover:bg-white/10 text-stone-300'
+              }`}
+            >
+              🍺 Taverna ({availableRoutes.filter((r) => r.companyId === 'comp-taverna').length})
+            </button>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('completed')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
-              activeTab === 'completed'
-                ? 'bg-amber-500 text-stone-950 shadow-sm'
-                : 'bg-white/5 hover:bg-white/10 text-stone-300'
-            }`}
-          >
-            Concluídas ({routes.filter((r) => r.status === 'completed').length})
-          </button>
+          {/* 2. Status Filter */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-stone-400 text-[11px] font-bold uppercase tracking-wider mr-1">Status:</span>
+            <button
+              type="button"
+              onClick={() => setActiveTab('active')}
+              className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                activeTab === 'active'
+                  ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
+                  : 'bg-white/5 hover:bg-white/10 text-stone-400'
+              }`}
+            >
+              Rotas Ativas ({availableRoutes.filter((r) => (companyFilter === 'all' || (r.companyId || 'comp-fazenda') === companyFilter) && (r.status === 'in_progress' || r.status === 'template')).length})
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('all')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
-              activeTab === 'all'
-                ? 'bg-amber-500 text-stone-950 shadow-sm'
-                : 'bg-white/5 hover:bg-white/10 text-stone-300'
-            }`}
-          >
-            Todas ({routes.length})
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('completed')}
+              className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                activeTab === 'completed'
+                  ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
+                  : 'bg-white/5 hover:bg-white/10 text-stone-400'
+              }`}
+            >
+              Concluídas ({availableRoutes.filter((r) => (companyFilter === 'all' || (r.companyId || 'comp-fazenda') === companyFilter) && r.status === 'completed').length})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('all')}
+              className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                activeTab === 'all'
+                  ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
+                  : 'bg-white/5 hover:bg-white/10 text-stone-400'
+              }`}
+            >
+              Todas ({availableRoutes.filter((r) => companyFilter === 'all' || (r.companyId || 'comp-fazenda') === companyFilter).length})
+            </button>
+          </div>
         </div>
       </div>
 
@@ -425,6 +544,9 @@ export function RouteChecklistManager() {
                         </span>
                         <div>
                           <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1">
+                              <span>{route.companyId === 'comp-ferrovia' ? '🚂 Ferrovia West Fox' : route.companyId === 'comp-taverna' ? '🍺 Taverna' : '🌾 Fazenda Pantaneiros'}</span>
+                            </span>
                             <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                               <Warehouse className="w-3 h-3 text-amber-400" />
                               <span>GESTÃO DE ESTOQUE • ROTA DE ANIMAIS</span>
@@ -912,6 +1034,11 @@ export function RouteChecklistManager() {
                     <div className="flex items-center gap-3">
                       <span className="text-2xl shrink-0">{route.icon || '📦'}</span>
                       <div>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-stone-800 text-stone-300 border border-stone-700">
+                            {route.companyId === 'comp-ferrovia' ? '🚂 Ferrovia West Fox' : route.companyId === 'comp-taverna' ? '🍺 Taverna' : '🌾 Fazenda Pantaneiros'}
+                          </span>
+                        </div>
                         <h3 className="text-base sm:text-lg font-black uppercase tracking-wider text-stone-100 flex items-center gap-2">
                           <span>{route.title}</span>
                           {isCompleted && (
