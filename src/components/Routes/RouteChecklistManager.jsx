@@ -138,6 +138,11 @@ export function RouteChecklistManager() {
   };
 
   const handleQuickAdd = (routeId, itemId, amount) => {
+    setItemInputs((prev) => {
+      const next = { ...prev };
+      delete next[`${routeId}-${itemId}`];
+      return next;
+    });
     const res = updateRouteItem(routeId, itemId, { addQuantity: amount });
     if (res && res.success === false) {
       alert(`⚠️ ${res.error || 'Não foi possível atualizar o estoque.'}`);
@@ -145,6 +150,11 @@ export function RouteChecklistManager() {
   };
 
   const handleToggleComplete = (routeId, itemId, currentStatus) => {
+    setItemInputs((prev) => {
+      const next = { ...prev };
+      delete next[`${routeId}-${itemId}`];
+      return next;
+    });
     const res = updateRouteItem(routeId, itemId, { markCompleted: !currentStatus });
     if (res && res.success === false) {
       alert(`⚠️ ${res.error || 'Não foi possível alterar o status.'}`);
@@ -153,12 +163,17 @@ export function RouteChecklistManager() {
 
   const handleSetQuantity = (routeId, itemId, val) => {
     const num = Math.max(0, parseFloat(val) || 0);
+    // Limpa rascunho local para que exiba imediatamente o estado do servidor/contexto
+    setItemInputs((prev) => {
+      const next = { ...prev };
+      delete next[`${routeId}-${itemId}`];
+      return next;
+    });
     const res = updateRouteItem(routeId, itemId, { setQuantity: num });
     if (res && res.success === false) {
       alert(`⚠️ ${res.error || 'Não foi possível atualizar o estoque.'}`);
       return;
     }
-    setItemInputs((prev) => ({ ...prev, [`${routeId}-${itemId}`]: num }));
   };
 
   const handleCustomAdd = (routeId, itemId) => {
@@ -169,11 +184,15 @@ export function RouteChecklistManager() {
       alert(`⚠️ ${res.error || 'Não foi possível adicionar quantidade.'}`);
       return;
     }
-    setItemInputs((prev) => ({ ...prev, [`${routeId}-${itemId}`]: '' }));
+    setItemInputs((prev) => {
+      const next = { ...prev };
+      delete next[`${routeId}-${itemId}`];
+      return next;
+    });
   };
 
   const handleDispatchBatch = (routeId, batchCount = 1) => {
-    const route = routes.find((r) => r.id === routeId);
+    const route = availableRoutes.find((r) => r.id === routeId);
     if (!route) return;
 
     const reward = (Number(route.rewardAmount) || 4600) * batchCount;
@@ -381,17 +400,25 @@ export function RouteChecklistManager() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-bold shadow-inner">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+              <span>Tempo Real Ativo</span>
+            </div>
+
             <button
               type="button"
               onClick={handleManualSync}
               disabled={isSyncing}
-              className="py-2.5 px-3.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95"
-              title="Sincronizar dados em tempo real com o banco de dados Supabase"
+              className="py-2 px-3 rounded-xl bg-stone-800/80 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700/70 font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+              title="Forçar atualização manual imediata com o banco Supabase"
             >
-              <RotateCcw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-amber-400' : 'text-stone-300'}`} />
-              <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Nuvem'}</span>
+              <RotateCcw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-amber-400' : 'text-stone-400'}`} />
+              <span>{isSyncing ? 'Sincronizando...' : 'Atualizar'}</span>
               {lastSyncTime && (
-                <span className="text-[10px] text-amber-300 font-mono">({lastSyncTime})</span>
+                <span className="text-[10px] text-stone-400 font-mono">({lastSyncTime})</span>
               )}
             </button>
 
@@ -805,6 +832,11 @@ export function RouteChecklistManager() {
                                     }}
                                     onBlur={(e) => {
                                       const raw = e.target.value.trim();
+                                      setItemInputs((prev) => {
+                                        const next = { ...prev };
+                                        delete next[`${route.id}-${item.id}`];
+                                        return next;
+                                      });
                                       if (raw !== '') {
                                         const parsed = parseFloat(raw);
                                         if (!isNaN(parsed)) {
@@ -1165,6 +1197,11 @@ export function RouteChecklistManager() {
                                     }}
                                     onBlur={(e) => {
                                       const raw = e.target.value.trim();
+                                      setItemInputs((prev) => {
+                                        const next = { ...prev };
+                                        delete next[`${route.id}-${item.id}`];
+                                        return next;
+                                      });
                                       if (raw !== '') {
                                         const parsed = parseFloat(raw);
                                         if (!isNaN(parsed)) {

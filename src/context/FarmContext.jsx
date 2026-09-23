@@ -274,6 +274,7 @@ export function FarmProvider({ children }) {
   // --- Supabase Cloud Sync & Realtime Status ---
   const [dbStatus, setDbStatus] = useState('connecting'); // 'connecting' | 'connected' | 'tables_missing' | 'offline' | 'error'
   const [dbError, setDbError] = useState(null);
+  const realtimeChannelRef = useRef(null);
 
   const fetchSupabaseData = async () => {
     if (!supabase) {
@@ -398,7 +399,27 @@ export function FarmProvider({ children }) {
     if (!supabase) return;
 
     const channel = supabase
-      .channel('farm_realtime_changes')
+      .channel('farm_realtime_changes', {
+        config: {
+          broadcast: { self: false },
+        },
+      })
+      .on('broadcast', { event: 'routes_updated' }, ({ payload }) => {
+        if (payload && Array.isArray(payload) && payload.length > 0) {
+          setRoutes(payload);
+          try {
+            localStorage.setItem(STORAGE_KEYS.ROUTES, JSON.stringify(payload));
+          } catch (_) {}
+        }
+      })
+      .on('broadcast', { event: 'companies_updated' }, ({ payload }) => {
+        if (payload && Array.isArray(payload) && payload.length > 0) {
+          setCompanies(payload);
+          try {
+            localStorage.setItem(STORAGE_KEYS.COMPANIES, JSON.stringify(payload));
+          } catch (_) {}
+        }
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           const item = toLocalTransaction(payload.new);
@@ -451,23 +472,89 @@ export function FarmProvider({ children }) {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'farm_settings' }, (payload) => {
         if (payload.new) {
-          if (payload.new.key === 'split' && payload.new.value) setSplitSettings(payload.new.value);
-          if (payload.new.key === 'discord' && payload.new.value) {
-            const val = payload.new.value;
+          let val = payload.new.value;
+          if (typeof val === 'string') {
+            try { val = JSON.parse(val); } catch (_) {}
+          }
+          if (payload.new.key === 'split' && val) setSplitSettings(val);
+          if (payload.new.key === 'discord' && val) {
             setDiscordSettings({
               ...val,
               byCompany: val?.byCompany || {},
             });
           }
-          if (payload.new.key === 'companies' && Array.isArray(payload.new.value)) setCompanies(payload.new.value);
-          if (payload.new.key === 'routes' && Array.isArray(payload.new.value)) setRoutes(payload.new.value);
+          if (payload.new.key === 'companies' && Array.isArray(val) && val.length > 0) {
+            setCompanies(val);
+            try { localStorage.setItem(STORAGE_KEYS.COMPANIES, JSON.stringify(val)); } catch (_) {}
+          }
+          if (payload.new.key === 'routes' && Array.isArray(val) && val.length > 0) {
+            setRoutes(val);
+            try { localStorage.setItem(STORAGE_KEYS.ROUTES, JSON.stringify(val)); } catch (_) {}
+          }
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setDbStatus('connected');
+        }
+      });
+
+    realtimeChannelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
+      realtimeChannelRef.current = null;
     };
+  }, []);
+
+  // --- Sincronização Automática em Segundo Plano (Multi-Usuários & Multi-Dispositivos) ---
+  // Garante que mesmo se a conexão WebSocket do celular/PC oscilar, todas as telas
+  // fiquem 100% sincronizadas sem nenhuma necessidade de intervenção do usuário.
+  useEffect(() => {
+    if (!supabase) return;
+
+    const interval = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      try {
+        const { data, error } = await supabase
+          .from('farm_settings')
+          .select('key, value, updated_at')
+          .in('key', ['routes', 'companies']);
+
+        if (!error && Array.isArray(data)) {
+          data.forEach((row) => {
+            let val = row.value;
+            if (typeof val === 'string') {
+              try { val = JSON.parse(val); } catch (_) {}
+            }
+            if (row.key === 'routes' && Array.isArray(val) && val.length > 0) {
+              setRoutes((current) => {
+                const currentStr = JSON.stringify(current);
+                const newStr = JSON.stringify(val);
+                if (currentStr !== newStr) {
+                  try { localStorage.setItem(STORAGE_KEYS.ROUTES, newStr); } catch (_) {}
+                  return val;
+                }
+                return current;
+              });
+            }
+            if (row.key === 'companies' && Array.isArray(val) && val.length > 0) {
+              setCompanies((current) => {
+                const currentStr = JSON.stringify(current);
+                const newStr = JSON.stringify(val);
+                if (currentStr !== newStr) {
+                  try { localStorage.setItem(STORAGE_KEYS.COMPANIES, newStr); } catch (_) {}
+                  return val;
+                }
+                return current;
+              });
+            }
+          });
+        }
+      } catch (_) {}
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Auto-sync whenever user returns to tab or focuses window (e.g. edited on mobile, returned to PC)
@@ -1843,6 +1930,20 @@ export function FarmProvider({ children }) {
     try {
       localStorage.setItem(STORAGE_KEYS.ROUTES, JSON.stringify(updatedList));
     } catch (_) {}
+
+    // Broadcast instantâneo para todos os outros aparelhos/navegadores conectados (latência < 50ms)
+    if (realtimeChannelRef.current) {
+      try {
+        realtimeChannelRef.current.send({
+          type: 'broadcast',
+          event: 'routes_updated',
+          payload: updatedList,
+        });
+      } catch (bcErr) {
+        console.warn('Erro ao emitir broadcast de rotas:', bcErr);
+      }
+    }
+
     if (supabase) {
       supabase.from('farm_settings').upsert({
         key: 'routes',
