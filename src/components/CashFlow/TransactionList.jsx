@@ -21,7 +21,13 @@ export function TransactionList() {
   const [copiedId, setCopiedId] = useState(null);
   const [sentDiscordId, setSentDiscordId] = useState(null);
 
-  const filteredTransactions = transactions.filter((tx) => {
+  const sortedTransactions = [...transactions].sort((a, b) => {
+    const timeA = new Date(a.createdAt || a.date).getTime() || 0;
+    const timeB = new Date(b.createdAt || b.date).getTime() || 0;
+    return timeB - timeA;
+  });
+
+  const filteredTransactions = sortedTransactions.filter((tx) => {
     const q = (searchTerm || '').toLowerCase().trim();
     const memberName = (tx.memberName || '').toLowerCase();
     const description = (tx.description || '').toLowerCase();

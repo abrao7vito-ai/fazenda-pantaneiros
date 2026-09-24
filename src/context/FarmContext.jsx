@@ -235,7 +235,8 @@ export function FarmProvider({ children }) {
       const { data: txData, error: txErr } = await supabase
         .from('transactions')
         .select('*')
-        .order('date', { ascending: false });
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
       if (!txErr && txData) {
         setTransactions(txData.map(toLocalTransaction));
       }
@@ -476,7 +477,8 @@ export function FarmProvider({ children }) {
         const { data: txData, error: txErr } = await supabase
           .from('transactions')
           .select('*')
-          .order('date', { ascending: false });
+          .order('date', { ascending: false })
+          .order('created_at', { ascending: false });
 
         if (!txErr && Array.isArray(txData)) {
           const mappedTx = txData.map(toLocalTransaction);

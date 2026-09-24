@@ -102,8 +102,32 @@ export function sanitizeString(val, maxLength = 255) {
     .slice(0, maxLength);
 }
 
+export function parseCurrencyInput(value) {
+  if (value === null || value === undefined || value === '') return 0;
+  if (typeof value === 'number') return value < 0 ? 0 : value;
+  let raw = String(value).trim();
+  if (raw.startsWith('-')) return 0;
+  let str = raw.replace(/[^\d.,]/g, '');
+  if (!str) return 0;
+  if (str.includes('.') && str.includes(',')) {
+    str = str.replace(/\./g, '').replace(',', '.');
+  } else if (str.includes(',')) {
+    str = str.replace(',', '.');
+  } else if (str.includes('.')) {
+    const parts = str.split('.');
+    if (parts.length > 2) {
+      str = parts.join('');
+    } else if (parts.length === 2 && parts[1].length === 3) {
+      str = parts[0] + parts[1];
+    }
+  }
+  const num = parseFloat(str);
+  return isNaN(num) || !isFinite(num) || num < 0 ? 0 : num;
+}
+
 export function sanitizePositiveNumber(val, fallback = 0) {
-  const num = Number(val);
+  if (val === null || val === undefined || val === '') return fallback;
+  const num = typeof val === 'string' ? parseCurrencyInput(val) : Number(val);
   if (isNaN(num) || num < 0 || !isFinite(num)) {
     return fallback;
   }

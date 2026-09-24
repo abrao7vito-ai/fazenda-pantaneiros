@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useFarm } from '../../context/FarmContext';
 import { formatDols, generateReportMessage } from '../../utils/formatters';
+import { parseCurrencyInput } from '../../utils/security';
 import { X, Plus, Minus, Copy, Check, Sparkles, Send } from 'lucide-react';
 
 export function TransactionFormModal({ isOpen, onClose }) {
@@ -16,8 +17,8 @@ export function TransactionFormModal({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
-  const numAmount = parseFloat(amount) || 0;
-  const simulatedTotal = type === 'income' ? totalBalance + numAmount : totalBalance - numAmount;
+  const numAmount = parseCurrencyInput(amount);
+  const simulatedTotal = type === 'income' ? totalBalance + numAmount : Math.max(0, totalBalance - numAmount);
 
   const livePreview = generateReportMessage({
     type,
@@ -180,14 +181,25 @@ export function TransactionFormModal({ isOpen, onClose }) {
 
             {/* Amount input */}
             <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Valor em DOLS *
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-stone-700">
+                  Valor em DOLS *
+                </label>
+                {type === 'expense' && totalBalance > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setAmount(String(totalBalance.toFixed(2)))}
+                    className="text-[11px] font-bold text-pantanal-800 hover:text-pantanal-950 underline cursor-pointer"
+                  >
+                    Sacar Todo o Saldo ({formatDols(totalBalance)})
+                  </button>
+                )}
+              </div>
               <div className="relative">
                 <input
-                  type="number"
-                  step="any"
-                  placeholder="Ex: 18900"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Ex: 18900 ou 18.900,00"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   required
@@ -197,6 +209,12 @@ export function TransactionFormModal({ isOpen, onClose }) {
                   DOLS
                 </span>
               </div>
+              {amount && numAmount > 0 && (
+                <div className="text-[11px] text-emerald-700 font-medium mt-1.5 flex items-center gap-1">
+                  <span>✓ Valor reconhecido:</span>
+                  <strong className="font-mono font-bold">{formatDols(numAmount)}</strong>
+                </div>
+              )}
             </div>
 
             {/* Who added / withdrew - AUTOMATIC FROM LOGIN */}
