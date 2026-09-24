@@ -286,12 +286,15 @@ export function TransactionList() {
                           </button>
                         )}
 
-                        {/* Delete button (only for owners or managers) */}
-                        {(currentRole === 'owner' || currentRole === 'manager') && (
+                        {/* Delete button (for owners, managers and master) */}
+                        {(currentRole === 'owner' || currentRole === 'manager' || currentRole === 'master') && (
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               if (window.confirm(`Excluir este lançamento de ${formatDols(tx.amount)}?`)) {
-                                deleteTransaction(tx.id);
+                                const res = await deleteTransaction(tx.id);
+                                if (res?.error) {
+                                  alert(res.error);
+                                }
                               }
                             }}
                             title="Remover lançamento"

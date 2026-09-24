@@ -1091,7 +1091,7 @@ export function FarmProvider({ children }) {
       : currentUser;
 
     const txDate = date || new Date().toISOString();
-    const activeCompId = companyId || currentCompanyId || 'comp-fazenda';
+    const activeCompId = companyId || (currentCompanyId && currentCompanyId !== 'all' ? currentCompanyId : 'comp-fazenda');
 
     const compCurrentBalance = companyBalances[activeCompId] != null ? companyBalances[activeCompId] : totalBalance;
     const newBalance = type === 'income' ? compCurrentBalance + numAmount : compCurrentBalance - numAmount;
@@ -1125,7 +1125,16 @@ export function FarmProvider({ children }) {
 
     if (supabase) {
       supabase.from('transactions').insert(toDbTransaction(newTx)).then(({ error }) => {
-        if (error) console.warn('Aviso ao sincronizar transação com Supabase:', error.message);
+        if (error) {
+          console.warn('Aviso ao sincronizar transação com Supabase:', error.message);
+          // If foreign key constraint violation, retry with member_id = null
+          if (error.code === '23503' || String(error.message).includes('foreign key')) {
+            const fallbackDbTx = { ...toDbTransaction(newTx), member_id: null };
+            supabase.from('transactions').insert(fallbackDbTx).then(({ error: retryErr }) => {
+              if (retryErr) console.warn('Erro ao inserir com fallback no Supabase:', retryErr.message);
+            });
+          }
+        }
       });
     }
 
@@ -1196,7 +1205,7 @@ export function FarmProvider({ children }) {
         details: `Tentativa não autorizada de excluir transação ${id}`,
         success: false,
       });
-      return { success: false, error: 'Acesso negado: apenas Donos ou Administrador Master podem excluir lançamentos.' };
+      return { success: false, error: 'Acesso negado: apenas Donos, Gerentes ou Administrador Master podem excluir lançamentos.' };
     }
 
     logSecurityEvent('TRANSACTION_DELETE', {

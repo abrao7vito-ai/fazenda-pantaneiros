@@ -180,11 +180,13 @@ export function toLocalTransaction(row) {
 
 export function toDbTransaction(tx) {
   if (!tx) return null;
+  // If memberId is mem-master or unset, setting member_id to null avoids foreign key violations in Supabase while preserving member_name
+  const safeMemberId = (tx.memberId && tx.memberId !== 'mem-master') ? tx.memberId : null;
   return {
     id: tx.id,
     type: tx.type,
     amount: Number(tx.amount),
-    member_id: tx.memberId,
+    member_id: safeMemberId,
     member_name: tx.memberName,
     category: tx.category,
     description: encodeCompanyTag(tx.description, tx.companyId),

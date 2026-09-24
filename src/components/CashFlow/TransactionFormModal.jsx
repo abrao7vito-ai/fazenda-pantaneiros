@@ -43,6 +43,7 @@ export function TransactionFormModal({ isOpen, onClose }) {
       category,
       description,
       date: new Date(date + 'T12:00:00').toISOString(),
+      companyId: currentCompany?.id && currentCompany.id !== 'all' ? currentCompany.id : 'comp-fazenda',
     });
 
     if (res?.error) {

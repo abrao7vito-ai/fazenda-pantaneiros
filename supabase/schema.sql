@@ -140,6 +140,10 @@ CREATE POLICY "Public read on transactions" ON public.transactions
 CREATE POLICY "Allow transaction insert" ON public.transactions 
   FOR INSERT WITH CHECK (amount > 0 AND (type = 'income' OR type = 'expense'));
 
+-- Permite exclusão de lançamentos autorizados
+CREATE POLICY "Allow transaction delete" ON public.transactions 
+  FOR DELETE USING (true);
+
 -- 3. GOALS: Leitura pública; Criação e atualização de metas
 DROP POLICY IF EXISTS "Allow all on goals" ON public.goals;
 DROP POLICY IF EXISTS "Public read on goals" ON public.goals;
