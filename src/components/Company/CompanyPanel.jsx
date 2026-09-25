@@ -3,6 +3,7 @@ import { useFarm } from '../../context/FarmContext';
 import { ProfitSplitView } from '../OwnerProfitSplit/ProfitSplitView';
 import { MemberManager } from '../Members/MemberManager';
 import { MasterCompanyDashboard } from './MasterCompanyDashboard';
+import { EditCompanyModal } from './EditCompanyModal';
 import { 
   Building2, 
   Crown, 
@@ -15,7 +16,8 @@ import {
   ShieldCheck,
   Settings,
   Lock,
-  Layers
+  Layers,
+  Edit3
 } from 'lucide-react';
 
 export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, onOpenCreateCompany }) {
@@ -26,6 +28,8 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, on
 
   // If Master, default to holding; If Owner, default to lucros of their company
   const [activeTab, setActiveTab] = useState(isMaster ? 'holding' : 'lucros');
+  const [isEditCompanyOpen, setIsEditCompanyOpen] = useState(false);
+  const [selectedCompanyToEdit, setSelectedCompanyToEdit] = useState(null);
 
   // Prevent any non-master from ever viewing the holding tab
   useEffect(() => {
@@ -56,8 +60,23 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, on
       <div className="bg-white border border-stone-200/90 rounded-3xl p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-300 flex items-center justify-center text-2xl shadow-inner">
-              {isMaster && activeTab === 'holding' ? '⚡' : (currentCompany?.icon || '👑')}
+            <div className="relative">
+              {isMaster && activeTab === 'holding' ? (
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-300 flex items-center justify-center text-2xl shadow-inner">
+                  ⚡
+                </div>
+              ) : (
+                <img
+                  src={currentCompany?.logoUrl || '/logo_westbaron.svg'}
+                  alt={currentCompany?.name}
+                  className="w-12 h-12 rounded-2xl object-cover ring-2 ring-ouro-500/30 shadow-md border border-stone-200 bg-stone-900"
+                />
+              )}
+              {activeTab !== 'holding' && (
+                <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-amber-500 ring-2 ring-white flex items-center justify-center text-[10px]">
+                  {currentCompany?.icon || '🏢'}
+                </div>
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -75,70 +94,93 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, on
               <p className="text-xs text-stone-500 mt-0.5">
                 {isMaster && activeTab === 'holding' 
                   ? 'Visão consolidada da holding e controle de todos os negócios.' 
-                  : `Gestão estratégica: lucros, equipe e conexões de ${currentCompany?.name || 'sua empresa'}.`}
+                  : currentCompany?.slogan || `Gestão estratégica: lucros, equipe e conexões de ${currentCompany?.name || 'sua empresa'}.`}
               </p>
             </div>
           </div>
 
-          {/* Tab Navigation Pill Bar */}
-          <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-stone-100/90 rounded-2xl border border-stone-200/80 self-start sm:self-auto">
-            {/* Holding Master Tab (Master Only) */}
-            {isMaster && (
+          {/* Tab Navigation Pill Bar & Action */}
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-stone-100/90 rounded-2xl border border-stone-200/80">
+              {/* Holding Master Tab (Master Only) */}
+              {isMaster && (
+                <button
+                  onClick={() => setActiveTab('holding')}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                    activeTab === 'holding'
+                      ? 'bg-stone-900 text-white shadow-sm'
+                      : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Holding Master</span>
+                </button>
+              )}
+
               <button
-                onClick={() => setActiveTab('holding')}
+                onClick={() => setActiveTab('lucros')}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === 'holding'
-                    ? 'bg-stone-900 text-white shadow-sm'
+                  activeTab === 'lucros'
+                    ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
                     : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
                 }`}
               >
-                <Layers className="w-3.5 h-3.5 text-amber-400" />
-                <span>Holding Master</span>
+                <Crown className="w-3.5 h-3.5 text-amber-600" />
+                <span>Repartição de Lucros</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('contas')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'contas'
+                    ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
+                    : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 text-pantanal-700" />
+                <span>Gestão de Contas</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('conexoes')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'conexoes'
+                    ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
+                    : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
+                }`}
+              >
+                <Radio className="w-3.5 h-3.5 text-[#5865F2]" />
+                <span>Conexões & Nuvem</span>
+              </button>
+            </div>
+
+            {activeTab !== 'holding' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCompanyToEdit(currentCompany);
+                  setIsEditCompanyOpen(true);
+                }}
+                className="py-2 px-3.5 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs border border-amber-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title="Editar Logo, Slogan e Informações da Empresa"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-amber-700" />
+                <span>Editar Empresa</span>
               </button>
             )}
-
-            <button
-              onClick={() => setActiveTab('lucros')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'lucros'
-                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
-              }`}
-            >
-              <Crown className="w-3.5 h-3.5 text-amber-600" />
-              <span>Repartição de Lucros</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('contas')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'contas'
-                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5 text-pantanal-700" />
-              <span>Gestão de Contas</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('conexoes')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'conexoes'
-                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-white/50'
-              }`}
-            >
-              <Radio className="w-3.5 h-3.5 text-[#5865F2]" />
-              <span>Conexões & Nuvem</span>
-            </button>
           </div>
         </div>
       </div>
 
       {/* Tab 1: Holding Master Dashboard (Master Only) */}
       {isMaster && activeTab === 'holding' && (
-        <MasterCompanyDashboard onOpenCreateCompany={onOpenCreateCompany} />
+        <MasterCompanyDashboard 
+          onOpenCreateCompany={onOpenCreateCompany} 
+          onEditCompany={(comp) => {
+            setSelectedCompanyToEdit(comp);
+            setIsEditCompanyOpen(true);
+          }}
+        />
       )}
 
       {/* Tab 2: Repartição de Lucros da Empresa Ativa */}
@@ -322,6 +364,18 @@ export function CompanyPanel({ onOpenDiscordSettings, onOpenDatabaseSettings, on
           </div>
 
         </div>
+      )}
+
+      {/* Modal: Editar Empresa */}
+      {isEditCompanyOpen && (
+        <EditCompanyModal
+          isOpen={isEditCompanyOpen}
+          onClose={() => {
+            setIsEditCompanyOpen(false);
+            setSelectedCompanyToEdit(null);
+          }}
+          company={selectedCompanyToEdit || currentCompany}
+        />
       )}
 
     </div>

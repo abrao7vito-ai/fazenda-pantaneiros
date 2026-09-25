@@ -273,7 +273,15 @@ export function FarmProvider({ children }) {
             setRoutes(row.value);
           }
           if (row.key === 'companies' && Array.isArray(row.value) && row.value.length > 0) {
-            setCompanies(row.value);
+            const merged = row.value.map((c) => {
+              const init = INITIAL_COMPANIES.find((x) => x.id === c.id);
+              return {
+                ...c,
+                logoUrl: c.logoUrl !== undefined ? c.logoUrl : (init?.logoUrl || ''),
+                slogan: c.slogan !== undefined ? c.slogan : (init?.slogan || ''),
+              };
+            });
+            setCompanies(merged);
           }
           if (row.key === 'discord' && row.value) {
             setDiscordSettings((prev) => {
@@ -795,7 +803,7 @@ export function FarmProvider({ children }) {
     }
   };
 
-  const addCompany = ({ name, segment, icon, unitLabel, code, initialBalance = 0, description = '' }) => {
+  const addCompany = ({ name, segment, icon, unitLabel, code, initialBalance = 0, description = '', logoUrl = '', slogan = '' }) => {
     if (currentRole !== 'master') {
       logSecurityEvent('UNAUTHORIZED_ACTION', {
         userId: currentUser?.id,
@@ -814,6 +822,8 @@ export function FarmProvider({ children }) {
       type: 'general',
       code: code ? sanitizeString(code, 20).toUpperCase() : `EMP • ${companies.length + 1}`,
       segment: segment ? sanitizeString(segment, 80) : 'Atividade Comercial',
+      slogan: slogan ? sanitizeString(slogan, 120) : '',
+      logoUrl: logoUrl ? sanitizeString(logoUrl, 500) : '',
       icon: icon || '🏢',
       unitLabel: unitLabel ? sanitizeString(unitLabel, 40) : 'Unidades',
       themeColor: 'amber',
@@ -864,8 +874,11 @@ export function FarmProvider({ children }) {
     return { success: true, company: newComp };
   };
 
-  const updateCompany = (companyId, updates) => {
-    if (currentRole !== 'master') {
+  const updateCompany = (companyId, updates = {}) => {
+    const isMaster = currentRole === 'master';
+    const isOwnerOfComp = currentRole === 'owner' && (currentUser?.companyId === companyId || currentUser?.companyId === 'all');
+
+    if (!isMaster && !isOwnerOfComp) {
       logSecurityEvent('UNAUTHORIZED_ACTION', {
         userId: currentUser?.id,
         userName: currentUser?.name,
@@ -873,9 +886,19 @@ export function FarmProvider({ children }) {
         details: `Tentativa não autorizada de alterar empresa ${companyId}`,
         success: false,
       });
-      return { success: false, error: 'Acesso restrito: apenas o Administrador Master pode alterar dados estruturais de empresas.' };
+      return { success: false, error: 'Acesso restrito: apenas o Administrador Master ou o Líder da empresa podem alterar seus dados.' };
     }
-    const updated = companies.map((c) => (c.id === companyId ? { ...c, ...updates } : c));
+
+    const safeUpdates = { ...updates };
+    if (safeUpdates.name) safeUpdates.name = sanitizeString(safeUpdates.name, 80);
+    if (safeUpdates.segment) safeUpdates.segment = sanitizeString(safeUpdates.segment, 80);
+    if (safeUpdates.code) safeUpdates.code = sanitizeString(safeUpdates.code, 20).toUpperCase();
+    if (safeUpdates.slogan !== undefined) safeUpdates.slogan = sanitizeString(safeUpdates.slogan, 120);
+    if (safeUpdates.logoUrl !== undefined) safeUpdates.logoUrl = sanitizeString(safeUpdates.logoUrl, 500);
+    if (safeUpdates.unitLabel) safeUpdates.unitLabel = sanitizeString(safeUpdates.unitLabel, 40);
+    if (safeUpdates.description !== undefined) safeUpdates.description = sanitizeString(safeUpdates.description, 500);
+
+    const updated = companies.map((c) => (c.id === companyId ? { ...c, ...safeUpdates } : c));
     setCompanies(updated);
     if (supabase) {
       supabase.from('farm_settings').upsert({
@@ -884,6 +907,15 @@ export function FarmProvider({ children }) {
         updated_at: new Date().toISOString(),
       }).then();
     }
+
+    logSecurityEvent('COMPANY_UPDATED', {
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      role: currentRole,
+      targetId: companyId,
+      details: `Campos: ${Object.keys(safeUpdates).join(', ')}`,
+    });
+
     return { success: true };
   };
 

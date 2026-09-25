@@ -7,7 +7,7 @@
 import { formatDols, formatFullDateBR } from './formatters';
 import { supabase } from './supabaseClient';
 
-const BOT_NAME = 'Fazenda Pantaneiros • West Fox';
+const BOT_NAME = 'WestBaron OS • Gestão Corporativa';
 const BOT_AVATAR_URL = 'https://i.imgur.com/vHqVwX2.png'; // Fallback or public avatar icon
 
 // Cache local em memória para os IDs das últimas mensagens enviadas por webhook/empresa
@@ -137,13 +137,14 @@ export async function sendDiscordPayload(webhookUrl, payload, options = {}) {
   // 2. Envia a nova mensagem com ?wait=true para registrar o ID gerado
   try {
     const postUrl = `${cleanBaseUrl}?wait=true`;
+    const senderUsername = payload.username || (options.companyName ? `${options.companyName} • WestBaron` : BOT_NAME);
     const response = await fetch(postUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        username: payload.username || BOT_NAME,
+        username: senderUsername,
         avatar_url: payload.avatar_url || BOT_AVATAR_URL,
         content: payload.content || null,
         embeds: payload.embeds || [],
@@ -191,14 +192,14 @@ export async function testDiscordWebhook(
           { name: 'Data', value: formatFullDateBR(new Date()), inline: true },
         ],
         footer: {
-          text: `${companyName} • Canal Oficial de Logs`,
+          text: `WestBaron ERP • ${companyName}`,
         },
         timestamp: new Date().toISOString(),
       },
     ],
   };
 
-  return sendDiscordPayload(webhookUrl, payload, options);
+  return sendDiscordPayload(webhookUrl, payload, { ...options, companyName });
 }
 
 /**
@@ -247,7 +248,7 @@ export async function sendCashFlowDiscordLog(webhookUrl, {
       { name: 'Saldo Total em Cofre', value: formattedTotal, inline: true },
     ],
     footer: {
-      text: `${companyName} • Fluxo de Caixa`,
+      text: `WestBaron ERP • ${companyName} (Fluxo de Caixa)`,
     },
     timestamp: new Date().toISOString(),
   };
@@ -255,7 +256,7 @@ export async function sendCashFlowDiscordLog(webhookUrl, {
   return sendDiscordPayload(webhookUrl, {
     content: `💰 **LOG FINANCEIRO • ${companyName.toUpperCase()}**`,
     embeds: [embed],
-  }, { companyId, deletePrevious });
+  }, { companyId, companyName, deletePrevious });
 }
 
 /**
@@ -285,7 +286,7 @@ export async function sendDeliverySubmittedDiscordLog(webhookUrl, {
       ...(notes ? [{ name: '📝 Local/Observações', value: notes, inline: false }] : []),
     ],
     footer: {
-      text: `${companyName} • Validação de Produção`,
+      text: `WestBaron ERP • ${companyName} (Validação de Produção)`,
     },
     timestamp: new Date().toISOString(),
   };
@@ -293,7 +294,7 @@ export async function sendDeliverySubmittedDiscordLog(webhookUrl, {
   return sendDiscordPayload(webhookUrl, {
     content: `📦 **NOVA REMESSA • ${companyName.toUpperCase()}**`,
     embeds: [embed],
-  }, { companyId, deletePrevious });
+  }, { companyId, companyName, deletePrevious });
 }
 
 /**
@@ -328,7 +329,7 @@ export async function sendDeliveryConfirmedDiscordLog(webhookUrl, {
       },
     ],
     footer: {
-      text: `${companyName} • Confirmação Oficial`,
+      text: `WestBaron ERP • ${companyName} (Confirmação Oficial)`,
     },
     timestamp: new Date().toISOString(),
   };
@@ -336,7 +337,7 @@ export async function sendDeliveryConfirmedDiscordLog(webhookUrl, {
   return sendDiscordPayload(webhookUrl, {
     content: `✅ **ENTREGA VALIDADA • ${companyName.toUpperCase()}**`,
     embeds: [embed],
-  }, { companyId, deletePrevious });
+  }, { companyId, companyName, deletePrevious });
 }
 
 /**
@@ -376,7 +377,7 @@ export async function sendPayrollDiscordLog(webhookUrl, {
       { name: '📋 Folha de Pagamentos', value: payoutsText || 'Nenhum pagamento registrado', inline: false },
     ],
     footer: {
-      text: `${companyName} • Divisão Oficial de Lucro`,
+      text: `WestBaron ERP • ${companyName} (Divisão de Lucro)`,
     },
     timestamp: new Date().toISOString(),
   };
@@ -384,7 +385,7 @@ export async function sendPayrollDiscordLog(webhookUrl, {
   return sendDiscordPayload(webhookUrl, {
     content: `🌾 **FECHAMENTO OFICIAL DE LUCROS • ${companyName.toUpperCase()}**`,
     embeds: [embed],
-  }, { companyId, deletePrevious });
+  }, { companyId, companyName, deletePrevious });
 }
 
 /**
@@ -411,7 +412,7 @@ export async function sendRouteStartedDiscordLog(webhookUrl, {
       { name: '👤 Responsável', value: startedBy, inline: true },
     ],
     footer: {
-      text: `${companyName || 'Fazenda Pantaneiros'} • Checklist de Rotas & Missões`,
+      text: `WestBaron ERP • ${companyName || 'Empresa'} (Rotas & Missões)`,
     },
     timestamp: new Date().toISOString(),
   };
@@ -419,7 +420,7 @@ export async function sendRouteStartedDiscordLog(webhookUrl, {
   return sendDiscordPayload(webhookUrl, {
     content: `🚂 **NOVA ROTA INICIADA: ${route.title} • RECOMPENSA ${formatDols(route.rewardAmount)}**`,
     embeds: [embed],
-  }, { companyId: companyId || route.companyId, deletePrevious });
+  }, { companyId: companyId || route.companyId, companyName, deletePrevious });
 }
 
 /**
@@ -460,7 +461,7 @@ export async function sendRouteProgressDiscordLog(webhookUrl, {
       { name: '📊 Conclusão', value: `${percent}%`, inline: true },
     ],
     footer: {
-      text: `${companyName || 'Fazenda Pantaneiros'} • Sistema de Rotas & Cargas`,
+      text: `WestBaron ERP • ${companyName || 'Empresa'} (Rotas & Cargas)`,
     },
     timestamp: new Date().toISOString(),
   };
@@ -468,7 +469,7 @@ export async function sendRouteProgressDiscordLog(webhookUrl, {
   return sendDiscordPayload(webhookUrl, {
     content: `📦 **ATUALIZAÇÃO DE ROTA: ${route.title} (${percent}% Concluído)**`,
     embeds: [embed],
-  }, { companyId: companyId || route.companyId, deletePrevious });
+  }, { companyId: companyId || route.companyId, companyName, deletePrevious });
 }
 
 /**
@@ -498,7 +499,7 @@ export async function sendRouteCompletedDiscordLog(webhookUrl, {
       { name: '🏆 Finalizado Por', value: completedBy, inline: true },
     ],
     footer: {
-      text: `${companyName || 'Fazenda Pantaneiros'} • Missão Cumprida!`,
+      text: `WestBaron ERP • ${companyName || 'Empresa'} (Missão Cumprida)`,
     },
     timestamp: new Date().toISOString(),
   };
@@ -506,7 +507,7 @@ export async function sendRouteCompletedDiscordLog(webhookUrl, {
   return sendDiscordPayload(webhookUrl, {
     content: `🎉 **ROTA FINALIZADA COM SUCESSO: ${route.title} • RECOMPENSA DE ${formatDols(route.rewardAmount)} RECEBIDA!**`,
     embeds: [embed],
-  }, { companyId: companyId || route.companyId, deletePrevious });
+  }, { companyId: companyId || route.companyId, companyName, deletePrevious });
 }
 
 /**
@@ -550,7 +551,7 @@ export async function sendRouteDispatchedDiscordLog(webhookUrl, {
       { name: '🎯 Rotas Restantes', value: `${routesRemaining} prontas`, inline: true },
     ],
     footer: {
-      text: `${companyName || 'Ferrovia West Fox'} • Gestão de Rotas & Estoque`,
+      text: `WestBaron ERP • ${companyName || 'Empresa'} (Rotas & Estoque)`,
     },
     timestamp: new Date().toISOString(),
   };
@@ -558,6 +559,6 @@ export async function sendRouteDispatchedDiscordLog(webhookUrl, {
   return sendDiscordPayload(webhookUrl, {
     content: `🚀 **${batchCount}x ROTA DE ANIMAIS DESPACHADA: +${formatDols(rewardEarned)} CREDITADO NO CAIXA!**`,
     embeds: [embed],
-  }, { companyId: companyId || route.companyId, deletePrevious });
+  }, { companyId: companyId || route.companyId, companyName, deletePrevious });
 }
 

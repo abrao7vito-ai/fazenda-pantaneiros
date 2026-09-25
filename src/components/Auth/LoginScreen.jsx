@@ -65,28 +65,28 @@ export function LoginScreen() {
 
       <div className="relative w-full max-w-md bg-white border border-stone-200/90 rounded-3xl p-6 sm:p-8 shadow-clean">
         
-        {/* Farm Logo & Title */}
+        {/* WestBaron Official Logo & Title */}
         <div className="text-center space-y-3">
           <div className="relative inline-block">
             <img
-              src="/logo_pantaneiros.jpg"
-              alt="Logo Fazenda Pantaneiros"
-              className="w-20 h-20 rounded-3xl mx-auto object-cover ring-4 ring-ouro-500/30 shadow-md border border-stone-200"
+              src="/logo_westbaron.svg"
+              alt="Logo WestBaron ERP"
+              className="w-20 h-20 rounded-3xl mx-auto object-cover ring-4 ring-ouro-500/30 shadow-md border border-stone-200 bg-stone-900"
             />
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-pantanal-700 ring-2 ring-white flex items-center justify-center text-white text-xs">
-              🌾
+            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-500 ring-2 ring-white flex items-center justify-center text-white text-xs">
+              👑
             </div>
           </div>
 
           <div>
-            <span className="text-[10px] font-bold text-pantanal-800 uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-pantanal-100 border border-pantanal-200">
-              WEST FOX • CORREIO 82
+            <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-300">
+              SISTEMA INTEGRADO DE HOLDINGS
             </span>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-stone-900 uppercase tracking-wide mt-1.5">
-              Fazenda Pantaneiros
+            <h1 className="text-2xl font-black text-stone-900 uppercase tracking-wider mt-1.5 font-['Plus_Jakarta_Sans',sans-serif]">
+              WESTBARON
             </h1>
             <p className="text-xs text-stone-500 font-medium">
-              Autenticação Confidencial da Fazenda
+              Autenticação Corporativa de Negócios & Frotas
             </p>
           </div>
         </div>
@@ -96,7 +96,7 @@ export function LoginScreen() {
           <div className="mt-5 p-3.5 rounded-2xl bg-amber-50 border border-amber-300 text-xs text-amber-950 flex items-start gap-2.5 animate-fadeIn">
             <Clock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
             <div>
-              <strong className="font-bold">Sessão Expirada por Inatividade:</strong> Você ficou mais de 15 minutos sem interagir no sistema. Por segurança da fazenda, faça login novamente.
+              <strong className="font-bold">Sessão Expirada por Inatividade:</strong> Você ficou mais de 15 minutos sem interagir no sistema. Por segurança da sua conta, faça login novamente.
             </div>
           </div>
         )}

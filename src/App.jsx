@@ -68,6 +68,12 @@ function AppLayout() {
     }
   }, [activeTab, isLeader]);
 
+  // Atualiza dinamicamente o título da aba do navegador com a marca WestBaron e a empresa ativa
+  useEffect(() => {
+    const compName = currentCompany?.name || 'Holding';
+    document.title = `WestBaron ERP • ${compName}`;
+  }, [currentCompany?.name]);
+
   const getPageTitle = () => {
     switch (activeTab) {
       case 'cashflow':

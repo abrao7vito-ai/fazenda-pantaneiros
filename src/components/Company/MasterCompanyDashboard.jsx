@@ -12,10 +12,11 @@ import {
   Trash2, 
   CheckCircle2, 
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  Edit3
 } from 'lucide-react';
 
-export function MasterCompanyDashboard({ onOpenCreateCompany }) {
+export function MasterCompanyDashboard({ onOpenCreateCompany, onEditCompany }) {
   const { 
     companies, 
     currentCompanyId, 
@@ -135,40 +136,70 @@ export function MasterCompanyDashboard({ onOpenCreateCompany }) {
                   {/* Card Header */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-[#fbfaf6] border border-stone-200 flex items-center justify-center text-2xl shadow-inner">
-                        {comp.icon}
+                      <div className="relative">
+                        <img
+                          src={comp.logoUrl || '/logo_westbaron.svg'}
+                          alt={comp.name}
+                          className="w-12 h-12 rounded-2xl object-cover ring-2 ring-ouro-500/20 shadow-md border border-stone-200 bg-stone-900"
+                        />
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-amber-500 ring-2 ring-white flex items-center justify-center text-[10px]">
+                          {comp.icon || '🏢'}
+                        </div>
                       </div>
                       <div>
                         <h4 className="text-base font-bold text-stone-900 leading-tight">
                           {comp.name}
                         </h4>
-                        <span className="text-[10px] font-bold text-stone-500 font-mono">
-                          {comp.code}
-                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] font-bold text-stone-500 font-mono">
+                            {comp.code}
+                          </span>
+                          {comp.slogan && (
+                            <span className="text-[10px] text-amber-700 font-medium truncate max-w-[160px]">
+                              • {comp.slogan}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    {isSelected ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        <span>Ativa</span>
-                      </span>
-                    ) : (
-                      comp.id !== 'comp-fazenda' && (
+                    <div className="flex items-center gap-1">
+                      {isSelected && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>Ativa</span>
+                        </span>
+                      )}
+
+                      {/* Edit Company Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onEditCompany) onEditCompany(comp);
+                        }}
+                        title="Editar Logo, Slogan e Informações da Empresa"
+                        className="text-stone-400 hover:text-amber-700 p-1.5 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-200 transition-colors cursor-pointer"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+
+                      {!isSelected && comp.id !== 'comp-fazenda' && (
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             if (window.confirm(`Excluir o negócio "${comp.name}"?`)) {
                               deleteCompany(comp.id);
                             }
                           }}
                           title="Excluir Empresa"
-                          className="text-stone-300 hover:text-rose-600 p-1 rounded-lg hover:bg-stone-50 transition-colors"
+                          className="text-stone-300 hover:text-rose-600 p-1.5 rounded-lg hover:bg-stone-50 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
-                      )
-                    )}
+                      )}
+                    </div>
                   </div>
 
                   {/* Segment & Description */}

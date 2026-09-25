@@ -149,29 +149,36 @@ export function Sidebar({
   return (
     <aside className="w-72 bg-white border-r border-stone-200/80 flex flex-col justify-between shrink-0 h-screen sticky top-0 overflow-y-auto select-none shadow-sm">
       
-      {/* Top Branding Section with Official Logo */}
+      {/* Top Branding Section with Dynamic Company Logo & WestBaron Fallback */}
       <div>
         <div className="p-4 border-b border-stone-200/80 bg-[#fbfaf6]">
           <div className="flex items-center gap-3">
-            <div className="relative">
+            <div className="relative shrink-0">
               <img
-                src="/logo_pantaneiros.jpg"
-                alt="Logo Fazenda Pantaneiros"
-                className="w-11 h-11 rounded-2xl object-cover ring-2 ring-ouro-500/30 shadow-md border border-stone-200"
+                key={currentCompany?.id || 'company-logo'}
+                src={currentCompany?.logoUrl || '/logo_westbaron.svg'}
+                alt={currentCompany?.name || 'WestBaron'}
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = '/logo_westbaron.svg';
+                }}
+                className="w-11 h-11 rounded-2xl object-cover ring-2 ring-ouro-500/30 shadow-md border border-stone-200 bg-stone-900"
               />
-              <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white flex items-center justify-center">
-                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
+              <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 ring-2 ring-white flex items-center justify-center text-[10px]">
+                {currentCompany?.icon || '🏛️'}
               </div>
             </div>
-            <div>
-              <h1 className="text-sm font-extrabold tracking-wider text-stone-900 uppercase">
-                Pantaneiros
+            <div className="min-w-0 flex-1">
+              <h1 className="text-sm font-extrabold tracking-wide text-stone-900 uppercase truncate" title={currentCompany?.name}>
+                {currentCompany?.name || 'WestBaron'}
               </h1>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[9px] font-bold text-pantanal-700 uppercase tracking-widest px-1.5 py-0.2 rounded bg-pantanal-100/80 border border-pantanal-200">
-                  WEST FOX
+                <span className="text-[9px] font-bold text-pantanal-700 uppercase tracking-widest px-1.5 py-0.2 rounded bg-pantanal-100/80 border border-pantanal-200 shrink-0">
+                  {currentCompany?.code ? currentCompany.code.split('•')[0].trim() : 'WEST FOX'}
                 </span>
-                <span className="text-[10px] text-stone-400 font-mono">Correio 82</span>
+                <span className="text-[10px] text-stone-500 font-medium truncate" title={currentCompany?.slogan || currentCompany?.code || 'Holding'}>
+                  {currentCompany?.slogan || currentCompany?.code || 'Holding'}
+                </span>
               </div>
             </div>
           </div>
@@ -339,7 +346,7 @@ export function Sidebar({
 
         {/* System security status footer */}
         <div className="flex items-center justify-between text-[10px] text-stone-400 px-1 pt-1 font-mono">
-          <span>WEST FOX • CORREIO 82</span>
+          <span>🏛️ WestBaron OS</span>
           <span className="flex items-center gap-1 text-emerald-700 font-semibold">
             <ShieldCheck className="w-3 h-3 text-emerald-600" />
             <span>Protegido</span>

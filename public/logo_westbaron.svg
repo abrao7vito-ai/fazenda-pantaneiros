@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#2a2421" />
+      <stop offset="60%" stop-color="#171412" />
+      <stop offset="100%" stop-color="#0c0a09" />
+    </radialGradient>
+
+    <!-- Gold Foil Gradients -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fffbeb" />
+      <stop offset="25%" stop-color="#fcd34d" />
+      <stop offset="50%" stop-color="#d97706" />
+      <stop offset="75%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#92400e" />
+    </linearGradient>
+
+    <linearGradient id="goldSheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fef3c7" />
+      <stop offset="50%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#78350f" />
+    </linearGradient>
+
+    <!-- Drop Shadow Filter -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.75" />
+    </filter>
+  </defs>
+
+  <!-- Base Circle -->
+  <circle cx="256" cy="256" r="246" fill="url(#bgGrad)" stroke="url(#goldGrad)" stroke-width="8" />
+  <circle cx="256" cy="256" r="230" fill="none" stroke="#d97706" stroke-width="2" stroke-dasharray="6,4" opacity="0.6" />
+
+  <!-- Outer Star Embellishments -->
+  <g fill="url(#goldGrad)" opacity="0.85">
+    <polygon points="256,36 261,48 274,48 263,56 267,68 256,60 245,68 249,56 238,48 251,48" />
+    <polygon points="256,476 261,464 274,464 263,456 267,444 256,452 245,444 249,456 238,464 251,464" />
+    <polygon points="36,256 48,251 48,238 56,249 68,245 60,256 68,267 56,263 48,274 48,261" />
+    <polygon points="476,256 464,251 464,238 456,249 444,245 452,256 444,267 456,263 464,274 464,261" />
+  </g>
+
+  <!-- Crown / Baron Coronet -->
+  <g filter="url(#shadow)" fill="url(#goldGrad)">
+    <!-- Coronet spikes and gems -->
+    <path d="M166,170 L200,215 L256,155 L312,215 L346,170 L340,240 L172,240 Z" />
+    <!-- Coronet Pearls / Spheres -->
+    <circle cx="166" cy="162" r="10" fill="#fffbeb" />
+    <circle cx="256" cy="146" r="13" fill="#fffbeb" />
+    <circle cx="346" cy="162" r="10" fill="#fffbeb" />
+    <circle cx="200" cy="210" r="6" fill="#fcd34d" />
+    <circle cx="312" cy="210" r="6" fill="#fcd34d" />
+  </g>
+
+  <!-- Center Monogram "W B" Heraldry Crest -->
+  <g filter="url(#shadow)">
+    <!-- Shield / Crest Plate -->
+    <path d="M156,236 L356,236 C356,330 256,380 256,380 C256,380 156,330 156,236 Z" 
+          fill="#1c1917" stroke="url(#goldGrad)" stroke-width="5" />
+    
+    <!-- Shield Inner Inset -->
+    <path d="M168,246 L344,246 C344,324 256,366 256,366 C256,366 168,324 168,246 Z" 
+          fill="none" stroke="#78350f" stroke-width="2" opacity="0.6" />
+
+    <!-- Stylized "W" Lettering inside Shield -->
+    <text x="256" y="325" 
+          text-anchor="middle" 
+          font-family="'Times New Roman', 'Cinzel', serif" 
+          font-size="82" 
+          font-weight="900" 
+          fill="url(#goldGrad)"
+          letter-spacing="2">
+      W
+    </text>
+
+    <!-- Train Track / Frontier Laurel Accent below 'W' -->
+    <g stroke="url(#goldGrad)" stroke-width="3" stroke-linecap="round" fill="none">
+      <path d="M200,342 Q256,364 312,342" />
+      <line x1="220" y1="344" x2="220" y2="352" />
+      <line x1="240" y1="347" x2="240" y2="356" />
+      <line x1="256" y1="348" x2="256" y2="357" />
+      <line x1="272" y1="347" x2="272" y2="356" />
+      <line x1="292" y1="344" x2="292" y2="352" />
+    </g>
+  </g>
+
+  <!-- Ribbon / Banner with "WESTBARON" -->
+  <g filter="url(#shadow)">
+    <!-- Banner Ribbon Shadow/Back -->
+    <path d="M96,412 L146,388 L146,432 Z" fill="#78350f" />
+    <path d="M416,412 L366,388 L366,432 Z" fill="#78350f" />
+
+    <!-- Banner Ribbon Front -->
+    <path d="M126,396 L386,396 L376,442 L136,442 Z" 
+          fill="url(#goldSheen)" stroke="#fffbeb" stroke-width="1.5" />
+
+    <!-- Ribbon Text -->
+    <text x="256" y="428" 
+          text-anchor="middle" 
+          font-family="'Impact', 'Cinzel', 'Arial Black', sans-serif" 
+          font-size="28" 
+          font-weight="900" 
+          fill="#1c1917" 
+          letter-spacing="4">
+      WESTBARON
+    </text>
+  </g>
+</svg>
